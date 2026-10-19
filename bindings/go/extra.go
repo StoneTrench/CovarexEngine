@@ -1,4 +1,4 @@
-package api_bindings
+package api
 
 import "unsafe"
 

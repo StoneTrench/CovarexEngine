@@ -1,99 +1,75 @@
 package main
 
 import (
+	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
+
+	. "github.com/StoneTrench/go-mc-clone/bindings/generator/langs"
+	. "github.com/StoneTrench/go-mc-clone/bindings/generator/types"
 )
 
-// TODO: Finish binding generator, implement c bindings
-
-const MODULE_NAME = "engine_bindings"
-
-func hDeclType(guest, host *strings.Builder, state ILangBuilder, name string, t IType) TypeIdent {
-	DeclType(guest, state, name, t)
-	return DeclType(host, GOLANG, name, t)
-}
-
-func hDeclFunc(guest, host *strings.Builder, state ILangBuilder, name string, t TypeFunc) {
-	DeclFunc(guest, state, MODULE_NAME, name, t)
-	DeclHostFunc(host, name, t)
-}
-
 func main() {
-	bguest := &strings.Builder{}
-	bhost := &strings.Builder{}
-	state := &GoLangBuilder{}
+	LANG := GOLANG
 
-	bguest.WriteString("package api_bindings\n")
-	bguest.WriteString("import (\n")
-	bguest.WriteString("\"unsafe\"")
-	bguest.WriteString("\n")
-	bguest.WriteString(")\n")
-	bhost.WriteString("package host\n")
-	bhost.WriteString("import \"context\"\n")
-	bhost.WriteString("import \"github.com/tetratelabs/wazero/api\"\n")
+	language := "go"
 
-	Color_t := hDeclType(bguest, bhost, state, "Color", TypeStruct{Fields: []Param{
-		{"R", TypeP_u8},
-		{"G", TypeP_u8},
-		{"B", TypeP_u8},
-		{"A", TypeP_u8},
-	}})
-	BlockType_t := hDeclType(bguest, bhost, state, "BlockType", TypeStruct{Fields: []Param{
-		{"Name", TypeP_string},
-		{"Color", Color_t},
-		{"IsSolid", TypeP_bool},
-	}})
-
-	fn_slog := TypeFunc{[]Param{{"msg", TypeP_string}}, nil}
-
-	hDeclFunc(bguest, bhost, state, "log-info", fn_slog)
-	hDeclFunc(bguest, bhost, state, "log-warn", fn_slog)
-	hDeclFunc(bguest, bhost, state, "log-error", fn_slog)
-
-	hDeclFunc(bguest, bhost, state, "register-block", TypeFunc{
-		[]Param{{"block", BlockType_t}},
-		[]Param{{"namespaceid", TypeP_string}},
-	})
-	hDeclFunc(bguest, bhost, state, "append-lang", TypeFunc{
-		[]Param{{"name", TypeP_string}},
-		nil,
-	})
-
-	hDeclFunc(bguest, bhost, state, "config-set-int", TypeFunc{Input: []Param{{"name", TypeP_string}, {"value", TypeP_i64}}})
-	hDeclFunc(bguest, bhost, state, "config-set-float", TypeFunc{Input: []Param{{"name", TypeP_string}, {"value", TypeP_f64}}})
-	hDeclFunc(bguest, bhost, state, "config-set-string", TypeFunc{Input: []Param{{"name", TypeP_string}, {"value", TypeP_string}}})
-
-	hDeclFunc(bguest, bhost, state, "config-get-int", TypeFunc{
-		[]Param{{"name", TypeP_string}},
-		[]Param{{"value", TypeP_i64}},
-	})
-	hDeclFunc(bguest, bhost, state, "config-get-float", TypeFunc{
-		[]Param{{"name", TypeP_string}},
-		[]Param{{"value", TypeP_f64}},
-	})
-	hDeclFunc(bguest, bhost, state, "config-get-string", TypeFunc{
-		[]Param{{"name", TypeP_string}},
-		[]Param{{"value", TypeP_string}},
-	})
-
-	file, err := os.Create("bindings/go/api.go")
+	root := "bindings/template"
+	entries, err := os.ReadDir(root)
 	if err != nil {
 		panic(err)
 	}
-	_, err = file.WriteString(strings.Replace(bguest.String(), ";", ";\n", -1))
-	if err != nil {
-		panic(err)
-	}
-	file.Close()
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		path := filepath.Join(root, e.Name())
+		name, decl, err := P_parse(path)
+		if err != nil {
+			panic(err)
+		}
+		bguest := &strings.Builder{}
+		bhost := &strings.Builder{}
 
-	file, err = os.Create("bindings/host/api.go")
-	if err != nil {
-		panic(err)
+		bhost.WriteString("package host\n")
+		bhost.WriteString("import \"github.com/tetratelabs/wazero/api\"\n")
+		bhost.WriteString("import \"context\"\n")
+		LANG.WriteHeader(bguest, name)
+
+		for _, d := range decl {
+			switch e := d.Type.(type) {
+			case TypeFunc:
+				DeclHostFunc(bhost, d.Name, e)
+			default:
+				GOLANG.WriteGuestDecl(bhost, name, d)
+			}
+			LANG.WriteGuestDecl(bguest, name, d)
+		}
+
+		if LANG.WriteFooter != nil {
+			LANG.WriteFooter(bguest, name)
+		}
+
+		file, err := os.Create(fmt.Sprintf("bindings/%[2]s/%[1]s.%[2]s", name, language))
+		if err != nil {
+			panic(err)
+		}
+		_, err = file.WriteString(bguest.String())
+		if err != nil {
+			panic(err)
+		}
+		file.Close()
+
+		file, err = os.Create(fmt.Sprintf("bindings/host/%s.go", name))
+		if err != nil {
+			panic(err)
+		}
+		_, err = file.WriteString(bhost.String())
+		if err != nil {
+			panic(err)
+		}
+		file.Close()
 	}
-	_, err = file.WriteString(strings.Replace(bhost.String(), ";", ";\n", -1))
-	if err != nil {
-		panic(err)
-	}
-	file.Close()
+
 }

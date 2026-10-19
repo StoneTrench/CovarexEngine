@@ -3,7 +3,18 @@ package main
 import (
 	"fmt"
 	"strings"
+
+	. "github.com/StoneTrench/go-mc-clone/bindings/generator/langs"
+	. "github.com/StoneTrench/go-mc-clone/bindings/generator/types"
 )
+
+type ConfigHostWriter struct {
+	Golang        LangBuilder
+	NameApiModule string
+	NameFnAlloc   string
+}
+
+// var Type_AllocFn = TypeFunc{Input: []Param{{"size", TypeP_u32}}, Output: []Param{{"offset", TypeP_WasmPointer}}}
 
 func DeclHostFunc(b *strings.Builder, name string, fn TypeFunc) {
 	bind_name := HyphenCaseToPascalCase(name)
@@ -16,80 +27,89 @@ func DeclHostFunc(b *strings.Builder, name string, fn TypeFunc) {
 	state := config.Golang
 	uses_malloc := false
 
-	wasm_params := []Param{
-		{"ctx", TypeIdent{nil, "context.Context"}},
-		{config.NameApiModule, TypeIdent{nil, "api.Module"}},
+	wasm_params := []TypeParam{
+		{Name: "ctx", Type: TypeIdent{Type: nil, Name: "context.Context"}},
+		{Name: config.NameApiModule, Type: TypeIdent{Type: nil, Name: "api.Module"}},
 	}
 
 	params := fn.Input
 	rets := fn.Output
 
 	for _, p := range rets {
-		uses_malloc = uses_malloc || IsUseMalloc(p)
+		uses_malloc = uses_malloc || GetABIAllocation(p.Type)
 	}
 
-	wasm_params = append(wasm_params, FullyLowerParams(params)...)
-	for _, p := range FullyLowerParams(rets) {
-		p.Type = TypeP_WasmPointer
+	wasm_params = append(wasm_params, RepParamToABI(params)...)
+	for _, p := range RepParamToABI(rets) {
+		p.Type = TypeP_usize
 		wasm_params = append(wasm_params, p)
 	}
 
-	Writes(b, state.StringFnHeader(bind_name, TypeFunc{
-		Input: []Param{
-			{fn_name, TypeFunc{
-				Input:  append([]Param{{"m", TypeIdent{nil, "api.Module"}}}, params...),
-				Output: rets,
-			}},
-		},
-		Output: []Param{
-			{"w", TypeIdent{nil, "HostBinding"}},
-		},
-	}))
-	Writes(b, state.StringBlockBegin())
+	Writef(b, "func %s(", bind_name)
+	header_inputs := []TypeParam{
+		{Name: fn_name, Type: TypeFunc{
+			Input:  append([]TypeParam{{Name: "m", Type: TypeIdent{Type: nil, Name: "api.Module"}}}, params...),
+			Output: rets,
+		}},
+	}
+	for i, e := range header_inputs {
+		Writes(b, e.Name)
+		Writes(b, " ")
+		Writes(b, state.StringType(e.Type))
+		if i < len(header_inputs)-1 {
+			Writes(b, ",")
+		}
+	}
+	Writes(b, ")(w HostBinding)")
+
+	Writes(b, "{\n")
 	{
 		Writef(b, "return HostBinding{\"%s\",", name)
-		Writes(b, state.StringType(TypeFunc{Input: wasm_params}))
-		Writes(b, state.StringBlockBegin())
 		{
-			if uses_malloc {
-				Writef(b, "_malloc:=%s.ExportedFunction(\"malloc\");", config.NameApiModule)
-				Writef(b, "%s:=func(size uint32)uint32{res,err:=_malloc.Call(ctx,uint64(size));if err!=nil{panic(err)};return uint32(res[0])};", config.NameFnAlloc)
-			}
-			for _, p := range params {
-				WriteGoHostDecode(config, b, p)
-			}
-			if len(rets) > 0 {
-				for i, p := range rets {
+			Writes(b, state.StringType(TypeFunc{Input: wasm_params}))
+			Writes(b, "{\n")
+			{
+				if uses_malloc {
+					Writef(b, "_malloc:=%s.ExportedFunction(\"malloc\");", config.NameApiModule)
+					Writef(b, "%s:=func(size uint32)uint32{res,err:=_malloc.Call(ctx,uint64(size));if err!=nil{panic(err)};return uint32(res[0])};", config.NameFnAlloc)
+				}
+				for _, p := range params {
+					WriteGoHostDecode(config, b, p)
+				}
+				if len(rets) > 0 {
+					for i, p := range rets {
+						Writes(b, p.Name)
+						if i < len(rets)-1 {
+							Writes(b, ",")
+						}
+					}
+					Writes(b, ":=")
+				}
+				Writef(b, "%s(%s,", fn_name, config.NameApiModule)
+				for i, p := range params {
 					Writes(b, p.Name)
-					if i < len(rets)-1 {
+					if i < len(params)-1 {
 						Writes(b, ",")
 					}
 				}
-				Writes(b, ":=")
-			}
-			Writef(b, "%s(%s,", fn_name, config.NameApiModule)
-			for i, p := range params {
-				Writes(b, p.Name)
-				if i < len(params)-1 {
-					Writes(b, ",")
+				Writes(b, ");")
+				if len(rets) > 0 {
+					for _, p := range rets {
+						WriteGoHostEncode(config, b, p)
+					}
 				}
 			}
-			Writes(b, ");")
-			if len(rets) > 0 {
-				for _, p := range rets {
-					WriteGoHostEncode(config, b, p)
-				}
-			}
+			Writes(b, "},\n")
 		}
-		Writes(b, "}}\n")
+		Writes(b, "}\n")
 	}
-	Writes(b, state.StringBlockEnd())
+	Writes(b, "}\n")
 }
-func WriteGoHostEncode(config *ConfigHostWriter, b *strings.Builder, p Param) {
+func WriteGoHostEncode(config *ConfigHostWriter, b *strings.Builder, p TypeParam) {
 	g := config.Golang
 	m := config.NameApiModule
 	alloc := config.NameFnAlloc
-	pr, _ := LowerParam(p)
+	pr, _ := ParamToABI(p)
 
 	name := p.Name
 	switch e := p.Type.(type) {
@@ -97,6 +117,7 @@ func WriteGoHostEncode(config *ConfigHostWriter, b *strings.Builder, p Param) {
 		switch e {
 		case TypeP_string:
 			Writef(b, "uWriteString(%s,%s,%s,%s,%s);", m, alloc, name, pr[0].Name, pr[1].Name)
+			Writes(b, "\n")
 			return
 		case TypeP_bool:
 			Writef(b, "if %s{", name)
@@ -104,25 +125,31 @@ func WriteGoHostEncode(config *ConfigHostWriter, b *strings.Builder, p Param) {
 			Writes(b, "}else{")
 			Writef(b, "uWriteAnyFixed[%s](%s,%s,%s)", g.StringType(pr[0].Type), m, "0", pr[0].Name)
 			Writes(b, "};")
+			Writes(b, "\n")
 			return
 		}
 
-		Writef(b, "uWriteAnyFixed[%s](%s,%s,%s);", g.StringType(pr[0].Type), m, name, pr[0].Name)
+		Writef(b, "uWriteAnyFixed(%s,%s,%s);", m, name, pr[0].Name)
+		Writes(b, "\n")
 		return
 	case TypeArray:
 		Writef(b, "uWritePlex(%s,%s,%s,%s);", m, alloc, name, pr[0].Name)
+		Writes(b, "\n")
 		return
 	case TypeSlice:
 		Writef(b, "uWriteSlice(%s,%s,%s,%s,%s);", m, alloc, name, pr[0].Name, pr[1].Name)
+		Writes(b, "\n")
 		return
 	case TypeFunc:
 		panic("can't pass function through wasm abi")
 	case TypePointer:
 		Writef(b, "uWritePointer(%s,%s,%s,%s);", m, alloc, name, pr[0].Name)
+		Writes(b, "\n")
 		return
 	case TypeStruct:
 		for i, f := range e.Fields {
-			Writes(b, g.StringAssign(pr[i], "%s.%s", name, f.Name))
+			Writef(b, "var %s = (%s)(%s.%s);", pr[i].Name, g.StringType(pr[i].Type), name, f.Name)
+			Writes(b, "\n")
 			WriteGoHostEncode(config, b, pr[i])
 		}
 		return
@@ -135,47 +162,48 @@ func WriteGoHostEncode(config *ConfigHostWriter, b *strings.Builder, p Param) {
 	}
 	// panic(fmt.Sprintf("unreachable code: %v", p.Type))
 }
-func WriteGoHostDecode(config *ConfigHostWriter, b *strings.Builder, p Param) {
+func WriteGoHostDecode(config *ConfigHostWriter, b *strings.Builder, p TypeParam) {
 	g := config.Golang
 	m := config.NameApiModule
-	pr, _ := LowerParam(p)
+	pr, _ := ParamToABI(p)
 
-	name := p.Name
 	switch e := p.Type.(type) {
 	case TypePrimitive:
 		switch e {
 		case TypeP_string:
-			Writes(b, g.StringDeclare(p))
-			Writes(b, g.StringAssign(p, "uReadString(%s, %s, %s)", m, pr[0].Name, pr[1].Name))
+			Writef(b, "var %s = uReadString(%s, %s, %s);", p.Name, m, pr[0].Name, pr[1].Name)
+			Writes(b, "\n")
 			return
 		case TypeP_bool:
-			Writes(b, g.StringDeclare(p))
-			Writes(b, g.StringAssign(p, "%s != 0", pr[0].Name))
+			Writef(b, "var %s = (%s)(%s!=0);", p.Name, g.StringType(p.Type), pr[0].Name)
+			Writes(b, "\n")
 			return
 		}
 
-		Writes(b, g.StringDeclare(p))
-		Writes(b, g.StringAssign(p, "%s", pr[0].Name))
+		Writef(b, "var %s = (%s)(%s);", p.Name, g.StringType(p.Type), pr[0].Name)
+		Writes(b, "\n")
 		return
 	case TypeArray:
-		Writes(b, g.StringDeclare(p))
-		Writes(b, g.StringAssign(p, "uReadPlex[%s](%s, %s)", g.StringType(p.Type), m, pr[0].Name))
+		Writef(b, "var %s = uReadPlex[%s](%s, %s);", p.Name, g.StringType(p.Type), m, pr[0].Name)
+		Writes(b, "\n")
 		return
 	case TypeSlice:
-		Writes(b, g.StringDeclare(p))
-		Writes(b, g.StringAssign(p, "uReadSlice[%s](%s, %s, %s)", g.StringType(p.Type), m, pr[0].Name, pr[1].Name))
+		Writef(b, "var %s = uReadSlice[%s](%s, %s, %s);", p.Name, g.StringType(e.Type), m, pr[0].Name, pr[1].Name)
+		Writes(b, "\n")
 		return
 	case TypeFunc:
 		panic("can't pass function through wasm abi")
 	case TypePointer:
-		Writes(b, g.StringDeclare(p))
-		Writes(b, g.StringAssign(p, "uReadPointer[%s](%s, %s)", g.StringType(p.Type), m, pr[0].Name))
+		Writef(b, "var %s = uReadPointer[%s](%s, %s);", p.Name, g.StringType(p.Type), m, pr[0].Name)
+		Writes(b, "\n")
 		return
 	case TypeStruct:
-		Writes(b, g.StringDeclare(p))
+		Writef(b, "var %s %s;", p.Name, g.StringType(p.Type))
+		Writes(b, "\n")
 		for i, f := range e.Fields {
 			WriteGoHostDecode(config, b, pr[i])
-			Writef(b, "%s.%s=%s;", name, f.Name, pr[i].Name)
+			Writef(b, "%s.%s=%s;", p.Name, f.Name, pr[i].Name)
+			Writes(b, "\n")
 		}
 		return
 	case TypeIdent:
