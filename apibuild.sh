@@ -13,4 +13,5 @@ set -e
 # cd ../..
 # wit-bindgen markdown --out-dir ./docs/api ./bindings/wit
 
-go run ./bindings/generator
+cd ./bindings/generator
+go run main.go -lang go -src ./env.abi -out ../out/

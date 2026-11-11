@@ -1,0 +1,78 @@
+{{block "main" . -}}
+package {{.Name}};
+
+import "unsafe"
+
+{{range .Funcs}}{{template "emit_FuncDecl" .}}{{end}}
+{{- end}}
+
+{{define "emit_FuncDecl"}}
+// go:wasmimport {{.ModuleName}} {{.WasmName}}
+func _{{.ModuleName}}_{{.Name}}({{template "emit_Params" .WasmParams}})
+func {{.Name}}({{template "emit_Params" .Params}}){{template "emit_Type" .RetType}}{
+	{{- range .Body}}
+	{{template "emit_Instr" .}}
+	{{- end}}
+}
+{{- end}}
+
+{{define "emit_Params" -}}
+{{range $i, $e := .}}{{if $i}}, {{end}}{{$e.Name}} {{template "emit_Type" $e.Type}}{{end}}
+{{- end}}
+
+{{define "emit_Fields" -}}
+{{range $i, $e := .}}{{if $i}}; {{end}}{{$e.Name}} {{template "emit_Type" $e.Type}}{{end}}
+{{- end}}
+
+{{define "emit_Type" -}}
+	{{- with GetTypeBody . -}}
+		{{- if not .Kind -}}INVALID
+		{{- else if eq .Kind "u8" -}}uint8
+		{{- else if eq .Kind "u16" -}}uint16
+		{{- else if eq .Kind "u32" -}}uint32
+		{{- else if eq .Kind "u64" -}}uint64
+
+		{{- else if eq .Kind "i8" -}}int8
+		{{- else if eq .Kind "i16" -}}int16
+		{{- else if eq .Kind "i32" -}}int32
+		{{- else if eq .Kind "i64" -}}int64
+
+		{{- else if eq .Kind "f32" -}}float32
+		{{- else if eq .Kind "f64" -}}float64
+
+		{{- else if eq .Kind "bool" -}}bool
+
+		{{- else if eq .Kind "string" -}}string
+		{{- else if eq .Kind "usize" -}}uint32
+
+		{{- else if eq .Kind "struct" -}} struct{ {{template "emit_Fields" .Fields}} }
+		{{- else if eq .Kind "union" -}} [{{.Size}}]byte
+		{{- else if eq .Kind "enum" -}} {{template "emit_Type" .Type}}
+		{{- else if eq .Kind "array" -}} [{{.Count}}]{{template "emit_Type" .Type}}
+		{{- else if eq .Kind "slice" -}} []{{template "emit_Type" .Type}}
+		{{- else if eq .Kind "pointer" -}} *{{template "emit_Type" .Type}}
+		{{- else if eq .Kind "identifier" -}} {{.Name}}
+		{{- else -}} UNKNOWN_TYPE
+		{{- end -}}
+	{{- end -}}
+{{- end}}
+
+{{define "emit_Instr" -}}
+		{{- if eq .Kind "Declare" -}}	
+
+	var {{.Out1}} {{template "emit_Type" .Typ1}};
+
+		{{- else if eq .Kind "SetField" -}}
+
+	{{.Out1}}.{{.Out2}} = {{.Inp1}}
+
+		{{- else if eq .Kind "UnpackString" -}}
+
+
+	{{.Out1}} := (*uint8)(unsafe.StringData({{.Inp1}}))
+	{{.Out2}} := uint32(len({{.Inp1}}))
+
+
+		{{- else -}}ERROR:{{.Kind}}
+	{{- end}}
+{{- end}}

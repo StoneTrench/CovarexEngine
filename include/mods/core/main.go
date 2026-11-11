@@ -9,7 +9,7 @@ import (
 )
 
 func RegBlock(name string, r, g, b, a uint8, sld bool) {
-	namespace := eb.RegisterBlock(eb.BlockType{
+	namespace := eb.RegAddBlock(eb.BlockType{
 		Name:    name,
 		Color:   eb.Color{R: r, G: g, B: b, A: a},
 		IsSolid: sld,
@@ -20,7 +20,10 @@ func RegBlock(name string, r, g, b, a uint8, sld bool) {
 func init() {
 	eb.LogInfo("Module initialized!")
 
-	eb.AppendLang("en-us")
+	err := eb.AppendLang("en-us")
+	if err != nil {
+		eb.LogError(err[0])
+	}
 	RegBlock("air", 255, 0, 255, 255, false)
 	RegBlock("stone", 128, 128, 128, 255, true)
 	RegBlock("dirt", 255, 128, 128, 255, true)

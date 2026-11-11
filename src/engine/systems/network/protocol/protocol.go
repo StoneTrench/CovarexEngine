@@ -12,10 +12,6 @@ All numbers are big-endian.
 Q: What is this supposed to do?
 A: It is the layer that exists between the Server/Client architecture and UDP. It handles reliable packets, split packets etc.
 
-
-
-
-
 */
 
 // ParsePacket_WithHeader returns ok as true if it parsed the packet,

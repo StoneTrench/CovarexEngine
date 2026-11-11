@@ -1,11 +1,10 @@
-# Here's the plan
+# Minecraft Clone
 
-Ship and Active level mean the same thing.
-
-# Background systems
+The name is temporary.
 
 ## Networking
 
+It's basically a 1:1 copy of Luanti's networking protocol, with a couple minor changes. [Read further here](./docs/NETWORK.md).
 
 ## Physics
 - [ ] Collisions. Entities are mapped to chunks, so they are essentially spatially mapped, only try to collide entities which are in the same chunk, or neighbouring chunks.
@@ -23,12 +22,6 @@ Ship and Active level mean the same thing.
 + [x] Load mod program
 + [x] Load api for mod
 + [x] Call initializer functions (to define registry entries, callbacks, systems)
-
-- [ ] World generation happens in phases, where each phase only has access to the previous phase data in itself and neighbouring chunks.
-	- [ ] World generation doesn't read data from the actual world, but either from a world generation cache, or a it regenerates the data for the neighbours.
-	- [ ] This is so that multiple chunks can be generated in parallel, without them having to share data (except for maybe read from a cache, but only read from it)
-
-- [ ] Implement configuration library, which handles engine configuration (physics tick speed, and other stuff I can't think of right now), and can also be used by the mods, to store configuration.
 
 ## Other
 - [ ] Entities are mapped to chunks

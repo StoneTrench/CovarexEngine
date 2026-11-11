@@ -1,20 +1,22 @@
 package modding
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"path"
 
 	fs "github.com/StoneTrench/go-mc-clone/src/engine/platform/filesystem"
+	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
 )
 
-func load_mod_headers(folder string, entries []fs.DirEntry) ([]Mod, error) {
-	mods := []Mod{}
+func load_mod_headers(folder string, entries []fs.DirEntry) ([]GuestModule, error) {
+	mods := []GuestModule{}
 	err_list := []error{}
 	for _, e := range entries {
 		if e.IsDir() {
-			mod := Mod{}
+			mod := GuestModule{}
 			mod.Init(path.Join(folder, e.Name()))
 
 			err := mod.LoadHeader()
@@ -27,27 +29,28 @@ func load_mod_headers(folder string, entries []fs.DirEntry) ([]Mod, error) {
 	}
 	return mods, errors.Join(err_list...)
 }
-func query_dependencies(mod_list []Mod, m Mod) ([]Mod, []error) {
-	dep_count := len(m.Dependencies)
-	res := make([]Mod, dep_count)
+func query_dependencies(mod_list []GuestModule, m GuestModule) ([]GuestModule, []error) {
+	deps := m.GetDependencies()
+	dep_count := len(deps)
+	res := make([]GuestModule, dep_count)
 
 	err_list := []error{}
 
 	dep_index := 0
-	for k, v := range m.Dependencies {
+	for k, v := range deps {
 		var found = false
 
 		for _, dep := range mod_list {
-			if dep.Header.Name == k {
-				if !v.Check(&dep.Version) {
+			if dep.header.Name == k {
+				if !v.Check(dep.GetVersion()) {
 					err := fmt.Errorf(
 						"wrong version of mod: (%s %s) expects (%s %s), got (%s %s) instead",
-						m.Header.Name,
-						m.Version.String(),
+						m.GetName(),
+						m.GetVersion().String(),
 						k,
 						v.String(),
-						dep.Header.Name,
-						dep.Version.String(),
+						dep.GetName(),
+						dep.GetVersion().String(),
 					)
 
 					err_list = append(err_list, err)
@@ -63,8 +66,8 @@ func query_dependencies(mod_list []Mod, m Mod) ([]Mod, []error) {
 		if !found {
 			err := fmt.Errorf(
 				"missing dependency: (%s %s) requires mod (%s %s)",
-				m.Header.Name,
-				m.Version.String(),
+				m.GetName(),
+				m.GetVersion().String(),
 				k,
 				v.String(),
 			)
@@ -75,17 +78,18 @@ func query_dependencies(mod_list []Mod, m Mod) ([]Mod, []error) {
 
 	return res, err_list
 }
-func sort_by_dependency_view(mod_list []Mod, mod Mod, visited map[string]struct{}, sorted *[]Mod) []error {
-	if _, exists := visited[mod.Header.Name]; exists {
-		not_contains := true
+func sort_by_dependency_view(mod_list []GuestModule, mod GuestModule, visited map[string]struct{}, sorted *[]GuestModule) []error {
+	if _, exists := visited[mod.header.Name]; exists {
+		has := false
 		for _, m := range *sorted {
-			if mod.Equal(&m) {
-				not_contains = false
+			if mod.GetName() == m.GetName() &&
+				mod.GetVersion().Equal(m.GetVersion()) {
+				has = true
 				break
 			}
 		}
-		if not_contains {
-			return []error{fmt.Errorf("cyclic dependency found in relation to mod (%s)", mod.String())}
+		if !has {
+			return []error{fmt.Errorf("cyclic dependency found in relation to mod (%s %s)", mod.GetName(), mod.GetVersion().String())}
 		}
 	}
 
@@ -107,8 +111,8 @@ func sort_by_dependency_view(mod_list []Mod, mod Mod, visited map[string]struct{
 
 	return err_list
 }
-func sort_by_dependency(mod_list []Mod) ([]Mod, error) {
-	sorted := []Mod{}
+func sort_by_dependency(mod_list []GuestModule) ([]GuestModule, error) {
+	sorted := []GuestModule{}
 	visited := make(map[string]struct{})
 
 	err_list := []error{}
@@ -123,10 +127,10 @@ func sort_by_dependency(mod_list []Mod) ([]Mod, error) {
 	return sorted, errors.Join(err_list...)
 }
 
-var LoadedModsList []Mod
+var LoadedModsList []GuestModule
 var name_to_mod map[string]int
 
-func LoadMods(folder string) error {
+func LoadMods(ctx context.Context, rt wazero.Runtime, folder string) error {
 	LoadedModsList = nil
 	entries, err := fs.ReadDir(folder)
 	if err != nil {
@@ -146,18 +150,23 @@ func LoadMods(folder string) error {
 		return err
 	}
 
+	// create id map
+	var error_arr []error
 	name_to_mod = make(map[string]int)
 	LoadedModsList = mods
 	for i := range mods {
 		m := &mods[i]
-		name_to_mod[m.GetName()] = i
+		id := m.GetName()
+		if _, exists := name_to_mod[id]; exists {
+			error_arr = append(error_arr, fmt.Errorf("duplicate mod id: %s", id))
+		}
+		name_to_mod[id] = i
 	}
 
 	// Load guest modules
-	var error_arr []error
 	for i := range mods {
 		m := &mods[i]
-		err := m.LoadWasm()
+		err := m.LoadWasm(ctx, rt)
 		if err != nil {
 			error_arr = append(error_arr, err)
 			continue
@@ -167,17 +176,7 @@ func LoadMods(folder string) error {
 	// Finish
 	return errors.Join(error_arr...)
 }
-func GetMod(name string) *Mod {
-	if LoadedModsList == nil {
-		return nil
-	}
-	i, ok := name_to_mod[name]
-	if ok {
-		return &LoadedModsList[i]
-	}
-	return nil
-}
-func GetModWasm(m api.Module) *Mod {
+func GetMod(m api.Module) *GuestModule {
 	if LoadedModsList == nil {
 		return nil
 	}

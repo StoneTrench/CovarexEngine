@@ -12,7 +12,7 @@ import (
 	"github.com/tetratelabs/wazero/api"
 )
 
-type ModHeader struct {
+type GuestModuleHeaderJson struct {
 	Name        string `json:"name"`
 	Version     string `json:"version"`
 	Author      string `json:"author"`
@@ -26,64 +26,98 @@ type ModHeader struct {
 
 	Environment map[string]string `json:"environment"`
 }
-type Mod struct {
-	Folder  string
-	Version semver.Version
 
-	Dependencies map[string]semver.Constraints
-
-	Header ModHeader
-
-	Config       map[string]string
-	WazeroModule api.Module
-
-	ctx     context.Context
-	Runtime wazero.Runtime
-}
-
-func (m *Mod) GetName() string {
-	return m.Header.Name
-}
-func (m *Mod) GetVersion() string {
-	return m.Version.String()
-}
-func (m *Mod) GetAuthor() string {
-	return m.Header.Author
-}
-func (m *Mod) GetDescription() string {
-	return m.Header.Description
-}
-func (m *Mod) GetHomepage() string {
-	return m.Header.Homepage
-}
-func (m *Mod) IsApiVersionValid(api_version int) error {
-	if m.Header.ApiVersion != api_version {
-		return fmt.Errorf("API version of engine and mod do not match (%d != %d)", api_version, m.Header.ApiVersion)
-	}
-	return nil
-}
-
-func (m *Mod) Init(folder string) *Mod {
-	m.Folder = folder
-	return m
-}
-func (m *Mod) Close() {
-	if m.WazeroModule != nil {
-		m.WazeroModule.Close(m.ctx)
-	}
-}
-func (m *Mod) LoadHeader() error {
-	file_mod_json, err := filesystem.ReadFile(path.Join(m.Folder, "mod.json"))
+func read_mod_header(folder string, out *GuestModuleHeaderJson) error {
+	file_mod_json, err := filesystem.ReadFile(path.Join(folder, "mod.json"))
 	if err != nil {
 		return fmt.Errorf("failed to read mod.json: %w", err)
 	}
 
-	var head ModHeader
+	var head GuestModuleHeaderJson
 	err = json.Unmarshal(file_mod_json, &head)
 	if err != nil {
 		return fmt.Errorf("failed to parse mod.json: %w", err)
 	}
-	m.Header = head
+	*out = head
+
+	return nil
+}
+func init_mod_wasm(ctx context.Context, file_path string, name string, rt wazero.Runtime) (api.Module, error) {
+	bin, err := filesystem.ReadFile(file_path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open wasm file: %w", err)
+	}
+
+	comp, err := rt.CompileModule(ctx, bin)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compile module: %w", err)
+	}
+	defer comp.Close(ctx)
+
+	cnf := wazero.NewModuleConfig().
+		WithStartFunctions("_initialize"). // this has to be called here manually for some reason
+		WithName(name)
+
+	inst, err := rt.InstantiateModule(ctx, comp, cnf)
+	if err != nil {
+		return nil, fmt.Errorf("failed to instantiate module: %w", err)
+	}
+
+	return inst, nil
+}
+
+type GuestModule struct {
+	header GuestModuleHeaderJson
+
+	Folder string
+
+	Version      semver.Version
+	Dependencies map[string]semver.Constraints
+
+	Instance api.Module
+}
+
+func (m GuestModule) GetName() string {
+	return m.header.Name
+}
+func (m GuestModule) GetVersion() *semver.Version {
+	return &m.Version
+}
+func (m GuestModule) GetDependencies() map[string]semver.Constraints {
+	return m.Dependencies
+}
+func (m GuestModule) GetAuthor() string {
+	return m.header.Author
+}
+func (m GuestModule) GetDescription() string {
+	return m.header.Description
+}
+func (m GuestModule) GetHomepage() string {
+	return m.header.Homepage
+}
+func (m GuestModule) IsApiVersionValid(api_version int) error {
+	if m.header.ApiVersion != api_version {
+		return fmt.Errorf("API version of engine and mod do not match (%d != %d)", api_version, m.header.ApiVersion)
+	}
+	return nil
+}
+
+func (m *GuestModule) Init(folder string) *GuestModule {
+	m.Folder = folder
+	return m
+}
+func (m *GuestModule) Close(ctx context.Context) {
+	if m.Instance != nil {
+		m.Instance.Close(ctx)
+	}
+}
+func (m *GuestModule) LoadHeader() error {
+	head := &m.header
+
+	err := read_mod_header(m.Folder, head)
+	if err != nil {
+		return err
+	}
 
 	vers, err := semver.NewVersion(head.Version)
 	if err != nil {
@@ -102,44 +136,11 @@ func (m *Mod) LoadHeader() error {
 
 	return nil
 }
-func (m *Mod) LoadWasm() error {
-	m.ctx = context.Background()
-	m.Runtime = wazero.NewRuntime(m.ctx)
-
-	file_path := path.Join(m.Folder, "main.wasm")
-	bin, err := filesystem.ReadFile(file_path)
+func (m *GuestModule) LoadWasm(ctx context.Context, rt wazero.Runtime) error {
+	inst, err := init_mod_wasm(ctx, path.Join(m.Folder, "main.wasm"), m.GetName(), rt)
 	if err != nil {
-		return fmt.Errorf("failed to open wasm file (%s): %w", m.String(), err)
+		return fmt.Errorf("failed to load mod (%s %s): %w", m.GetName(), m.Version.String(), err)
 	}
-
-	comp_mod, err := m.Runtime.CompileModule(m.ctx, bin)
-	if err != nil {
-		return fmt.Errorf("failed to compile module (%s): %w", m.String(), err)
-	}
-
-	cnf := wazero.NewModuleConfig().
-		WithStartFunctions("_initialize"). // this has to be called here manually for some reason
-		WithName(m.GetName())
-
-	err = load_api(m.Runtime, m)
-	if err != nil {
-		return fmt.Errorf("failed load api (%s): %w", m.String(), err)
-	}
-
-	inst_mod, err := m.Runtime.InstantiateModule(m.ctx, comp_mod, cnf)
-	if err != nil {
-		return fmt.Errorf("failed to instantiate module (%s): %w", m.String(), err)
-	}
-
-	m.WazeroModule = inst_mod
+	m.Instance = inst
 	return nil
-}
-func (m *Mod) String() string {
-	return fmt.Sprintf("%s@%s", m.GetName(), m.GetVersion())
-}
-func (m *Mod) Equal(other *Mod) bool {
-	if (m == nil) || (other == nil) {
-		return false
-	}
-	return m.String() == other.String()
 }

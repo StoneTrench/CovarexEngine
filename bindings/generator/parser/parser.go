@@ -1,211 +1,435 @@
-package main
+package parser
 
 import (
+	"errors"
 	"fmt"
+	"os"
 
-	. "github.com/StoneTrench/go-mc-clone/bindings/generator/types"
-	"github.com/StoneTrench/go-mc-clone/src/engine/platform/filesystem"
+	. "github.com/StoneTrench/go-mc-clone/bindings/generator/model"
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
 )
 
-type P_Module struct {
+type t_SourceFile struct {
+	Modules []*t_Module `parser:"@@*"`
+}
+type t_Module struct {
 	Name  string    `parser:"'module' @Ident"`
-	Types []*P_Decl `parser:"@@*"`
+	Types []*t_Decl `parser:"'{' @@* '}'"`
 }
-
-type P_Decl struct {
-	Name string  `parser:"'decl' @Ident"`
-	Type *P_Type `parser:"@@"`
+type t_Decl struct {
+	Name     string   `parser:"@Ident"`
+	Generics []string `parser:"('<' @Ident (',' @Ident)* '>')?"`
+	Type     *t_Type  `parser:"@@"`
 }
-type P_Param struct {
+type t_Param struct {
 	Name string  `parser:"@Ident"`
-	Give bool    `parser:"'give'?"`
-	Type *P_Type `parser:"@@"`
+	Type *t_Type `parser:"@@"`
 }
-type P_Field struct {
+type t_Field struct {
 	Name string  `parser:"@Ident"`
-	Type *P_Type `parser:"@@"`
+	Type *t_Type `parser:"@@"`
 }
 
-type P_Type struct {
-	Struct  *P_Struct  `parser:"@@"`
-	Array   *P_Array   `parser:"| @@"`
-	Slice   *P_Slice   `parser:"| @@"`
-	Pointer *P_Pointer `parser:"| @@"`
-	Func    *P_Func    `parser:"| @@"`
-	Ident   *P_Ident   `parser:"| @@"`
+type t_Type struct {
+	Paren   *t_Type    `parser:"'(' @@ ')'"`
+	Struct  *t_Struct  `parser:"| @@"`
+	Union   *t_Union   `parser:"| @@"`
+	Enum    *t_Enum    `parser:"| @@"`
+	Array   *t_Array   `parser:"| @@"`
+	Slice   *t_Slice   `parser:"| @@"`
+	Func    *t_Func    `parser:"| @@"`
+	Pointer *t_Pointer `parser:"| @@"`
+	Ident   *t_Ident   `parser:"| @@"`
 }
 
-type P_Ident struct {
-	Name string `parser:"@Ident"`
+type t_Ident struct {
+	Name     string    `parser:"@Ident"`
+	Generics []*t_Type `parser:"('<' @@ (',' @@)* '>')?"`
 }
-type P_Struct struct {
-	Fields []*P_Field `parser:"'struct' '{' @@* '}'"`
+type t_Struct struct {
+	Fields []*t_Field `parser:"'struct' '{' @@* '}'"`
 }
-type P_Array struct {
+type t_Union struct {
+	Fields []*t_Field `parser:"'union' '{' @@* '}'"`
+}
+type t_Enum struct {
+	Tag    string   `parser:"'enum' @('u8'|'u16'|'u32'|'u64'|'i8'|'i16'|'i32'|'i64'|'usize')"`
+	Fields []string `parser:"'{' @Ident* '}'"`
+}
+type t_Array struct {
 	Count int64   `parser:"'[' @Int ']'"`
-	Type  *P_Type `parser:"@@"`
+	Type  *t_Type `parser:"@@"`
 }
-type P_Slice struct {
-	Type *P_Type `parser:"'[' ']' @@"`
+type t_Slice struct {
+	Type *t_Type `parser:"'[' ']' @@"`
 }
-type P_Pointer struct {
-	_    struct{} `parser:"'*'"`
-	Mut  bool     `parser:"@'mut'?"`
-	Type *P_Type  `parser:"@@"`
+type t_Pointer struct {
+	Mut  bool    `parser:"'*' @'mut'?"`
+	Type *t_Type `parser:"@@"`
 }
-type P_Func struct {
-	Input  []*P_Param `parser:"'(' (@@ (',' @@)*)? ')'"`
-	Output []*P_Param `parser:"'(' (@@ (',' @@)*)? ')'"`
+type t_Func struct {
+	Input []*t_Param `parser:"'fn' '(' (@@ (',' @@)*)? ')'"`
+	// Output []*P_Param `parser:"'(' (@@ (',' @@)*)? ')'"`
+	Output *t_Param `parser:"('(' @@? ')')?"`
 }
 
-var lexerDef = lexer.MustSimple([]lexer.SimpleRule{
+type Module struct {
+	Name string
+	Decl []TypeField
+}
+type module_decl struct {
+	Raw  *t_Decl
+	Type TypeRef
+}
+type fnLookup = func(name string) (module_decl, error)
+
+func convert_ident(c *TypeCollection, LUF fnLookup, node *t_Ident) (TypeRef, error) {
+	if len(node.Generics) == 0 {
+		if p, err := convert_primitive(node.Name); err == nil {
+			return c.Ref(p), nil
+		}
+	}
+
+	decl, err := LUF(node.Name)
+	if err != nil {
+		return TypeRef_Invalid, fmt.Errorf("error occured while looking for declaration: %w", err)
+	}
+	if len(node.Generics) != len(decl.Raw.Generics) {
+		return TypeRef_Invalid, fmt.Errorf("incorrect number of generics: expected %d, got %d", len(decl.Raw.Generics), len(node.Generics))
+	}
+
+	if decl.Type != TypeRef_Invalid {
+		return c.Ref(TypeIdent{
+			Type: decl.Type,
+			Name: decl.Raw.Name,
+		}), nil
+	}
+
+	new_decl := LUF
+	if len(node.Generics) > 0 {
+		gen_map := make(map[string]*t_Type)
+
+		for i := range node.Generics {
+			gen_map[decl.Raw.Generics[i]] = node.Generics[i]
+		}
+
+		new_decl = func(name string) (module_decl, error) {
+			if t, ok := gen_map[name]; ok {
+				return module_decl{
+					Raw: &t_Decl{
+						Name:     "",
+						Generics: nil,
+						Type:     t,
+					},
+					Type: TypeRef_Invalid,
+				}, nil
+			}
+			return LUF(name)
+		}
+	}
+
+	ref, err := convert_type(c, new_decl, decl.Raw.Type)
+	if err != nil {
+		return TypeRef_Invalid, err
+	}
+	if len(decl.Raw.Generics) == 0 {
+		decl.Type = ref
+	}
+
+	if len(decl.Raw.Name) == 0 {
+		return ref, nil
+	} else if len(decl.Raw.Generics) == 0 {
+		return c.Ref(TypeIdent{
+			Type: ref,
+			Name: decl.Raw.Name,
+		}), nil
+	} else {
+		return c.Ref(TypeIdent{
+			Type: ref,
+			Name: fmt.Sprintf("%s-%d", decl.Raw.Name, ref),
+		}), nil
+	}
+}
+func convert_primitive(name string) (TypePrimitive, error) {
+	switch name {
+	case "u8":
+		return TypeP_u8, nil
+	case "u16":
+		return TypeP_u16, nil
+	case "u32":
+		return TypeP_u32, nil
+	case "u64":
+		return TypeP_u64, nil
+
+	case "i8":
+		return TypeP_i8, nil
+	case "i16":
+		return TypeP_i16, nil
+	case "i32":
+		return TypeP_i32, nil
+	case "i64":
+		return TypeP_i64, nil
+
+	case "f32":
+		return TypeP_f32, nil
+	case "f64":
+		return TypeP_f64, nil
+
+	case "bool":
+		return TypeP_bool, nil
+	case "string":
+		return TypeP_string, nil
+	case "usize":
+		return TypeP_usize, nil
+	}
+
+	return TypeP_Invalid, fmt.Errorf("unknown primitive: %s", name)
+}
+func convert_struct(c *TypeCollection, LUF fnLookup, t *t_Struct) (TypeRef, error) {
+	fields, err := convert_fields(c, LUF, t.Fields)
+	if err != nil {
+		return TypeRef_Invalid, err
+	}
+	return c.Ref(TypeStruct{Fields: fields}), nil
+}
+func convert_enum(c *TypeCollection, _ fnLookup, t *t_Enum) (TypeRef, error) {
+	tag, err := convert_primitive(t.Tag)
+	if err != nil {
+		return TypeRef_Invalid, err
+	}
+	body := TypeEnum{}
+	body.Type = c.Ref(tag)
+	body.Fields = t.Fields
+	return c.Ref(body), nil
+}
+func convert_array(c *TypeCollection, LUF fnLookup, t *t_Array) (TypeRef, error) {
+	e, err := convert_type(c, LUF, t.Type)
+	if err != nil {
+		return TypeRef_Invalid, err
+	}
+	return c.Ref(TypeArray{
+		Count: int(t.Count),
+		Type:  e,
+	}), nil
+}
+func convert_slice(c *TypeCollection, LUF fnLookup, t *t_Slice) (TypeRef, error) {
+	e, err := convert_type(c, LUF, t.Type)
+	if err != nil {
+		return TypeRef_Invalid, err
+	}
+	return c.Ref(TypeArray{
+		Type: e,
+	}), nil
+}
+func convert_pointer(c *TypeCollection, LUF fnLookup, t *t_Pointer) (TypeRef, error) {
+	e, err := convert_type(c, LUF, t.Type)
+	if err != nil {
+		return TypeRef_Invalid, err
+	}
+	return c.Ref(TypePointer{
+		Type: e,
+		Mut:  t.Mut,
+	}), nil
+}
+func convert_func(c *TypeCollection, LUF fnLookup, t *t_Func) (TypeRef, error) {
+	params, err := convert_params(c, LUF, t.Input)
+	if err != nil {
+		return TypeRef_Invalid, err
+	}
+	output, err := convert_param(c, LUF, t.Output)
+	if err != nil {
+		return TypeRef_Invalid, err
+	}
+	out_params := []TypeParam{}
+	if output != nil {
+		output.Give = true // not borrow
+		out_params = append(out_params, *output)
+	}
+	return c.Ref(TypeFunc{
+		Input:  params,
+		Output: out_params,
+	}), nil
+}
+func convert_type(c *TypeCollection, LUF fnLookup, t *t_Type) (TypeRef, error) {
+	if t == nil {
+		return TypeRef_Invalid, nil
+	} else if t.Paren != nil {
+		return convert_type(c, LUF, t.Paren)
+	} else if t.Ident != nil {
+		return convert_ident(c, LUF, t.Ident)
+	} else if t.Struct != nil {
+		return convert_struct(c, LUF, t.Struct)
+	} else if t.Enum != nil {
+		return convert_enum(c, LUF, t.Enum)
+	} else if t.Array != nil {
+		return convert_array(c, LUF, t.Array)
+	} else if t.Slice != nil {
+		return convert_slice(c, LUF, t.Slice)
+	} else if t.Pointer != nil {
+		return convert_pointer(c, LUF, t.Pointer)
+	} else if t.Func != nil {
+		return convert_func(c, LUF, t.Func)
+	}
+	return TypeRef_Invalid, fmt.Errorf("failed to parse type, everything was nil")
+}
+
+var LEXER = lexer.MustSimple([]lexer.SimpleRule{
 	{Name: "Comment", Pattern: `//[^\n]*`},
 	{Name: "Ident", Pattern: `[a-zA-Z_][a-zA-Z0-9_\-]*`},
-	{Name: "Punct", Pattern: `[{}()\[\],*]`},
+	{Name: "Punct", Pattern: `[{}()\[\],*<>]`}, // added '<' '>'
 	{Name: "Whitespace", Pattern: `[ \t\r\n;]+`},
 	{Name: "Int", Pattern: `[0-9][0-9]*`},
 })
-
-var parser = participle.MustBuild[P_Module](
-	participle.Lexer(lexerDef),
+var PARSER = participle.MustBuild[t_SourceFile](
+	participle.Lexer(LEXER),
 	participle.Elide("Comment", "Whitespace"),
 )
 
-func P_parse(name string) (string, []TypeField, error) {
-	bits, err := filesystem.ReadFile(name)
+// var TYPE_PARSER = participle.MustBuild[t_Type](
+// 	participle.Lexer(LEXER),
+// 	participle.Elide("Comment", "Whitespace"),
+// )
+// func parse_must[T any](p *participle.Parser[T], s string) *T {
+// 	res, err := p.ParseBytes("must", []byte(s))
+// 	if err != nil {
+// 		panic(err)
+// 	}
+// 	return res
+// }
+// var TYPE_RESULT = &t_Decl{
+// 	Name:     "result",
+// 	Generics: []string{"T", "E"},
+// 	Type:     parse_must(TYPE_PARSER, "struct{Tag u8;Val union{Val T; Err E}}"),
+// }
+// var TYPE_OPTION = &t_Decl{
+// 	Name:     "option",
+// 	Generics: []string{"T"},
+// 	Type:     parse_must(TYPE_PARSER, "struct{Tag u8;Val T}"),
+// }
+
+func ParseSource(c *TypeCollection, name string) ([]Module, error) {
+	bits, err := os.ReadFile(name)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to parse file: %w", err)
+		return nil, fmt.Errorf("failed to parse file: %w", err)
 	}
-	module, err := parser.ParseBytes(name, bits)
+	return parse_bytes(c, name, bits)
+}
+func parse_bytes(c *TypeCollection, name string, bits []byte) ([]Module, error) {
+	src, err := PARSER.ParseBytes(name, bits)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to parse file: %w", err)
+		return nil, fmt.Errorf("failed to parse file: %w", err)
 	}
-	name, decl := P_collect_decl(module)
-	return name, decl, nil
+	LUF := func(name string) (module_decl, error) {
+		// if name == "result" {
+		// 	return module_decl{
+		// 		Raw:  TYPE_RESULT,
+		// 		Type: TypeRef_Invalid,
+		// 	}, nil
+		// }
+		// if name == "option" {
+		// 	return module_decl{
+		// 		Raw:  TYPE_OPTION,
+		// 		Type: TypeRef_Invalid,
+		// 	}, nil
+		// }
+		var n module_decl
+		return n, fmt.Errorf("declaration %s doesn't exist", name)
+	}
+	result := make([]Module, len(src.Modules))
+	for i, mod := range src.Modules {
+		m, err := convert_module(c, LUF, mod)
+		if err != nil {
+			return nil, err
+		}
+		result[i] = *m
+	}
+	return result, nil
 }
 
-func P_collect_decl(t *P_Module) (string, []TypeField) {
+func convert_module(c *TypeCollection, LUF fnLookup, t *t_Module) (*Module, error) {
 	decl := make(map[string]int)
-	res_decl := []TypeField{}
+	res_decl := []module_decl{}
 
-	LUF := func(name string) IType {
-		i, exists := decl[name]
-		if !exists {
-			return nil
+	new_LUF := func(name string) (module_decl, error) {
+		if i, ok := decl[name]; ok {
+			return res_decl[i], nil
 		}
-		return res_decl[i].Type
+		return LUF(name)
 	}
 
 	for _, t := range t.Types {
-		res_t := P_convert_type(LUF, t.Type)
 		decl[t.Name] = len(res_decl)
-		res_decl = append(res_decl, TypeField{Name: t.Name, Type: res_t})
+		res_decl = append(res_decl, module_decl{
+			Raw:  t,
+			Type: TypeRef_Invalid,
+		})
 	}
 
-	return t.Name, res_decl
-}
-
-func P_convert_type(decl func(name string) IType, t *P_Type) IType {
-	if t.Ident != nil {
-		return P_convert_ident(decl, t.Ident)
-	} else if t.Struct != nil {
-		return TypeStruct{
-			Fields: P_convert_field(decl, t.Struct.Fields),
-		}
-	} else if t.Array != nil {
-		return TypeArray{
-			Count: int(t.Array.Count),
-			Type:  P_convert_type(decl, t.Array.Type),
-		}
-	} else if t.Slice != nil {
-		return TypeSlice{
-			Type: P_convert_type(decl, t.Slice.Type),
-		}
-	} else if t.Pointer != nil {
-		return TypePointer{
-			Type: P_convert_type(decl, t.Pointer.Type),
-			Mut:  t.Pointer.Mut,
-		}
-	} else if t.Func != nil {
-		return TypeFunc{
-			Input:  P_convert_param(decl, t.Func.Input),
-			Output: P_convert_param(decl, t.Func.Output),
+	res_fields := []TypeField{}
+	err_list := []error{}
+	for _, d := range res_decl {
+		if len(d.Raw.Generics) == 0 {
+			t := d.Type
+			if t == TypeRef_Invalid {
+				var err error
+				t, err = convert_type(c, new_LUF, d.Raw.Type)
+				if err != nil {
+					err_list = append(err_list, err)
+					continue
+				}
+			}
+			res_fields = append(res_fields, TypeField{
+				Name: d.Raw.Name,
+				Type: t,
+			})
 		}
 	}
-	panic("failed to parse type, everything was nil")
-}
 
-func P_convert_field(decl func(name string) IType, t []*P_Field) []TypeField {
-	res := make([]TypeField, len(t))
-	for i, p := range t {
-		res[i] = TypeField{
-			Name: p.Name,
-			Type: P_convert_type(decl, p.Type),
-		}
+	if len(err_list) > 0 {
+		return nil, errors.Join(err_list...)
 	}
-	return res
+
+	return &Module{
+		Name: t.Name, Decl: res_fields,
+	}, nil
 }
 
-func P_convert_param(decl func(name string) IType, t []*P_Param) []TypeParam {
+func convert_param(c *TypeCollection, LUF fnLookup, t *t_Param) (*TypeParam, error) {
+	if t == nil {
+		return nil, nil
+	}
+	e, err := convert_type(c, LUF, t.Type)
+	if err != nil {
+		return nil, err
+	}
+	return &TypeParam{
+		TypeField: TypeField{Name: t.Name, Type: e},
+		Give:      false,
+	}, nil
+}
+func convert_params(c *TypeCollection, LUF fnLookup, t []*t_Param) ([]TypeParam, error) {
 	res := make([]TypeParam, len(t))
 	for i, p := range t {
-		res[i] = TypeParam{
-			TypeField: TypeField{
-				Name: p.Name,
-				Type: P_convert_type(decl, p.Type),
-			},
-			Give: p.Give,
+		r, err := convert_param(c, LUF, p)
+		if err != nil {
+			return nil, err
 		}
+		res[i] = *r
 	}
-	return res
+	return res, nil
 }
-
-func P_convert_ident(decl func(name string) IType, t *P_Ident) IType {
-	switch t.Name {
-	case "void":
-		return TypeP_void
-
-	case "u8":
-		return TypeP_u8
-	case "u16":
-		return TypeP_u16
-	case "u32":
-		return TypeP_u32
-	case "u64":
-		return TypeP_u64
-
-	case "i8":
-		return TypeP_i8
-	case "i16":
-		return TypeP_i16
-	case "i32":
-		return TypeP_i32
-	case "i64":
-		return TypeP_i64
-
-	case "f32":
-		return TypeP_f32
-	case "f64":
-		return TypeP_f64
-
-	case "bool":
-		return TypeP_bool
-	case "string":
-		return TypeP_string
-	case "error":
-		return TypeP_error
-	case "size":
-		return TypeP_usize
-	}
-
-	if d := decl(t.Name); d != nil {
-		return TypeIdent{
-			Type: d,
-			Name: t.Name,
+func convert_fields(c *TypeCollection, LUF fnLookup, t []*t_Field) ([]TypeField, error) {
+	res := make([]TypeField, len(t))
+	for i, p := range t {
+		e, err := convert_type(c, LUF, p.Type)
+		if err != nil {
+			return nil, err
+		}
+		res[i] = TypeField{
+			Name: p.Name,
+			Type: e,
 		}
 	}
-
-	panic("unknown identifier: " + t.Name)
+	return res, nil
 }

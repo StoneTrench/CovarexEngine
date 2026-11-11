@@ -57,6 +57,8 @@ func (TypePointer) itype()   {}
 func (TypeFunc) itype()      {}
 func (TypeIdent) itype()     {}
 
+type TypeKind string
+
 // These Kind functions are here for the go templating to be able to figure out what kind to emit.
 
 func (t TypePrimitive) Kind() string {
@@ -240,7 +242,7 @@ func pad_struct(offset, alignment int) int {
 	}
 }
 
-// Sizeof returns the size of the type. Struct is packed (no alignment padding inside struct).
+// Sizeof returns the size of the type.
 func SizeofAlignof(c *TypeCollection, r TypeRef, sizeof_ptr int) (int, int, error) {
 	body, err := c.Body(r)
 	if err != nil {
@@ -300,6 +302,7 @@ func SizeofAlignof(c *TypeCollection, r TypeRef, sizeof_ptr int) (int, int, erro
 			s += pad_struct(s, af)
 			s += sf
 		}
+		s += pad_struct(s, a)
 		return s, a, nil
 	case TypeEnum:
 		return SizeofAlignof(c, e.Type, sizeof_ptr)
@@ -382,17 +385,17 @@ func TypeToExplicitType(c *TypeCollection, r TypeRef, convert_fully bool) (TypeR
 		s := TypeArray{Count: e.Count, Type: sf}
 		return c.Ref(s), nil
 	case TypeSlice:
-		return _convert_fully_TypeToExplicitType(c, c.Ref(TypeP_usize), convert_fully)
+		return _convert_fully_TypeToExplicitType(c, Type_bodyof_slice(c, e.Type, true), convert_fully)
 	case TypePointer:
 		return _convert_fully_TypeToExplicitType(c, c.Ref(TypeP_usize), convert_fully)
 	case TypeFunc:
 		return _convert_fully_TypeToExplicitType(c, c.Ref(TypeP_usize), convert_fully)
 	case TypeIdent:
-		sf, err := TypeToExplicitType(c, e.Type, true)
+		sf, err := TypeToExplicitType(c, e.Type, convert_fully)
 		if err != nil {
 			return 0, err
 		}
-		s := TypeIdent{Name: "wasm_" + e.Name, Type: sf}
+		s := TypeIdent{Name: e.Name, Type: sf}
 		return c.Ref(s), nil
 	default:
 		return 0, fmt.Errorf("invalid type kind: %s", body.Kind())

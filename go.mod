@@ -15,9 +15,9 @@ require (
 )
 
 require (
+	github.com/alecthomas/participle/v2 v2.1.4
 	github.com/ebitengine/purego v0.10.0 // indirect
 	github.com/jupiterrider/ffi v0.7.0 // indirect
-	github.com/ojrac/opensimplex-go v1.0.2
 )
 
 replace (

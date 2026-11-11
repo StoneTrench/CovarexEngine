@@ -48,16 +48,6 @@
 	+ Large structures cannot overlap outside the region for the sake of simplicity.
 	+ Large structures shouldn't overlap.
 
-```go
-
-// go:wasmexport phase
-func phase() {
-	solid := wgen.ReadResource()
-	
-}
-
-```
-
 ## Phase
 
 + World generation is split into phases, each phase can only read the it's own, and it's 26 (9+8+9) neighbours' previous phase.
@@ -110,3 +100,18 @@ func phase() {
 	+ Or emit warnings when certain phases get left out, or ordering is uncertain/nondeterministic.
 + [x] How do you determine if tho large structures overlap? AABB is simple, but a large tree and a village, shouldn't necesseraly cancel out eachother if their AABBs overlap.
 	+ For now AABBs are fine.
+
+# Worker pool
+
+What I described here is basically just a worker pool made of WASM modules.
+
+```
+Pool
+ ├── Worker[0]
+ │		├── Instance(moduleA)
+ │		├── Instance(moduleB)
+ │		└── Instance(moduleC)
+ ├── Worker[1]
+ │		└── (same modules, new instances)
+ ...
+```
