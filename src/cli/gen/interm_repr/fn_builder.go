@@ -1,9 +1,9 @@
-package intermediate_representation
+package interm_repr
 
 import (
 	"fmt"
 
-	types "github.com/StoneTrench/go-mc-clone/bindings/generator/model"
+	"github.com/StoneTrench/go-mc-clone/src/cli/gen/types"
 )
 
 type fnBuilder struct {
@@ -15,13 +15,13 @@ type fnBuilder struct {
 	BufferMinSize int
 }
 
-func (b *fnBuilder) Ref(t types.IType) TYPE_REF {
+func (b *fnBuilder) Ref(t types.IType) types.TypeRef {
 	return b.TypColl.Ref(t)
 }
-func (b *fnBuilder) Body(t TYPE_REF) (types.IType, error) {
+func (b *fnBuilder) Body(t types.TypeRef) (types.IType, error) {
 	return b.TypColl.Body(t)
 }
-func (b *fnBuilder) Next(t TYPE_REF) Name {
+func (b *fnBuilder) Next(t types.TypeRef) Name {
 	return b.NameC.Next(t)
 }
 func (b *fnBuilder) NextT(t types.IType) Name {
@@ -100,7 +100,7 @@ func (b *fnBuilder) Serialize(m ir_writer_mode, names []Name) []error {
 	return err_list
 }
 
-func sizeof(c *TColl, p TYPE_REF) int {
+func sizeof(c *TColl, p types.TypeRef) int {
 	body, err := c.Body(p)
 	if err != nil {
 		return 0

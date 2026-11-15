@@ -1,6 +1,10 @@
-package intermediate_representation
+package interm_repr
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/StoneTrench/go-mc-clone/src/cli/gen/types"
+)
 
 type NameCount uint
 
@@ -11,6 +15,6 @@ func (n *NameCount) NextString() string {
 	(*n) = (*n) + 1
 	return n.CurrString()
 }
-func (n *NameCount) Next(t TYPE_REF) Name {
+func (n *NameCount) Next(t types.TypeRef) Name {
 	return Name{Name: n.NextString(), Type: t}
 }

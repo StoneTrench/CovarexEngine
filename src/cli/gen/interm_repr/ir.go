@@ -1,14 +1,13 @@
-package intermediate_representation
+package interm_repr
 
 import (
 	"fmt"
 	"strings"
 
-	. "github.com/StoneTrench/go-mc-clone/bindings/generator/model"
+	"github.com/StoneTrench/go-mc-clone/src/cli/gen/types"
 )
 
-type TColl = TypeCollection
-type TYPE_REF = TypeRef
+type TColl = types.TypeCollection
 
 /*
 These are the types that the template will process to create the binding sourcecode in the target language.
@@ -18,7 +17,7 @@ Assume that types are all packed (no padding in struct).
 
 type Name struct {
 	Name string
-	Type TypeRef
+	Type types.TypeRef
 }
 type Module struct {
 	WasmName string
@@ -32,7 +31,7 @@ type FuncDecl struct {
 	WasmName     string
 	Name         string
 	WasmParams   []Name
-	OutputStruct TypeRef
+	OutputStruct types.TypeRef
 	Input        []Name
 	Output       []Name
 	Block        []Instr
@@ -106,7 +105,7 @@ func (t FuncDecl) StringPadding(depth int, pad string) string {
 	s.WriteString("(")
 	arr := make([]string, len(t.Input))
 	for i, e := range t.Input {
-		arr[i] = fmt.Sprintf("%s:%s", e.Name, Keyof(e.Type))
+		arr[i] = fmt.Sprintf("%s:%s", e.Name, types.Keyof(e.Type))
 	}
 	s.WriteString(strings.Join(arr, ", "))
 	s.WriteString(")")
@@ -114,7 +113,7 @@ func (t FuncDecl) StringPadding(depth int, pad string) string {
 		s.WriteString("(")
 		arr := make([]string, len(t.Output))
 		for i, e := range t.Output {
-			arr[i] = fmt.Sprintf("%s:%s", e.Name, Keyof(e.Type))
+			arr[i] = fmt.Sprintf("%s:%s", e.Name, types.Keyof(e.Type))
 		}
 		s.WriteString(strings.Join(arr, ", "))
 		s.WriteString(")")
@@ -152,7 +151,7 @@ func (t Instr) StringPadding(depth int, pad string) string {
 	if len(t.Output) > 0 {
 		arr := make([]string, len(t.Output))
 		for i, e := range t.Output {
-			arr[i] = fmt.Sprintf("%s:%s", e.Name, Keyof(e.Type))
+			arr[i] = fmt.Sprintf("%s:%s", e.Name, types.Keyof(e.Type))
 		}
 		s.WriteString(strings.Join(arr, ", "))
 		s.WriteString(" = ")
@@ -163,7 +162,7 @@ func (t Instr) StringPadding(depth int, pad string) string {
 	if len(t.Input) > 0 {
 		arr := make([]string, len(t.Input))
 		for i, e := range t.Input {
-			arr[i] = fmt.Sprintf("%s:%s", e.Name, Keyof(e.Type))
+			arr[i] = fmt.Sprintf("%s:%s", e.Name, types.Keyof(e.Type))
 		}
 		s.WriteString(strings.Join(arr, ", "))
 	}
@@ -219,33 +218,33 @@ var op_buffer_free = "FreeBuffer"                 // Destroy buffer.
 var op_buffer_pointer = "BufferPointer" // Get 0/start pointer of the buffer. On the host this copies the buffer into the guest.
 var op_buffer_length = "BufferLength"   // Get length of buffer.
 
-var op_buffer_io = map[TypePrimitive][2]string{
-	TypeP_u8:  {"WriteBufU8", "ReadBufU8"},
-	TypeP_u16: {"WriteBufU16", "ReadBufU16"},
-	TypeP_u32: {"WriteBufU32", "ReadBufU32"},
-	TypeP_u64: {"WriteBufU64", "ReadBufU64"},
-	TypeP_i8:  {"WriteBufI8", "ReadBufI8"},
-	TypeP_i16: {"WriteBufI16", "ReadBufI16"},
-	TypeP_i32: {"WriteBufI32", "ReadBufI32"},
-	TypeP_i64: {"WriteBufI64", "ReadBufI64"},
+var op_buffer_io = map[types.TypePrimitive][2]string{
+	types.TypeP_u8:  {"WriteBufU8", "ReadBufU8"},
+	types.TypeP_u16: {"WriteBufU16", "ReadBufU16"},
+	types.TypeP_u32: {"WriteBufU32", "ReadBufU32"},
+	types.TypeP_u64: {"WriteBufU64", "ReadBufU64"},
+	types.TypeP_i8:  {"WriteBufI8", "ReadBufI8"},
+	types.TypeP_i16: {"WriteBufI16", "ReadBufI16"},
+	types.TypeP_i32: {"WriteBufI32", "ReadBufI32"},
+	types.TypeP_i64: {"WriteBufI64", "ReadBufI64"},
 
-	TypeP_f32: {"WriteBufF32", "ReadBufF32"},
-	TypeP_f64: {"WriteBufF64", "ReadBufF64"},
+	types.TypeP_f32: {"WriteBufF32", "ReadBufF32"},
+	types.TypeP_f64: {"WriteBufF64", "ReadBufF64"},
 }
 var op_string_conv = [2]string{"StringToSlice", "SliceToString"}
 var op_pointer_conv = [2]string{"PointerToValue", "ValueToPointer"} // deref and ref
 var op_bool_conv = [2]string{"BoolToU8", "U8ToBool"}
 var op_usize_conv = [2]string{"UsizeToU32", "U32ToUsize"}
 
-var op_enum_conv = map[TypePrimitive][2]string{
-	TypeP_u8:  {"EnumToU8", "U8ToEnum"},
-	TypeP_u16: {"EnumToU16", "U16ToEnum"},
-	TypeP_u32: {"EnumToU32", "U32ToEnum"},
-	TypeP_u64: {"EnumToU64", "U64ToEnum"},
-	TypeP_i8:  {"EnumToI8", "I8ToEnum"},
-	TypeP_i16: {"EnumToI16", "I16ToEnum"},
-	TypeP_i32: {"EnumToI32", "I32ToEnum"},
-	TypeP_i64: {"EnumToI64", "I64ToEnum"},
+var op_enum_conv = map[types.TypePrimitive][2]string{
+	types.TypeP_u8:  {"EnumToU8", "U8ToEnum"},
+	types.TypeP_u16: {"EnumToU16", "U16ToEnum"},
+	types.TypeP_u32: {"EnumToU32", "U32ToEnum"},
+	types.TypeP_u64: {"EnumToU64", "U64ToEnum"},
+	types.TypeP_i8:  {"EnumToI8", "I8ToEnum"},
+	types.TypeP_i16: {"EnumToI16", "I16ToEnum"},
+	types.TypeP_i32: {"EnumToI32", "I32ToEnum"},
+	types.TypeP_i64: {"EnumToI64", "I64ToEnum"},
 }
 
 var op_plex_make = "MakeStruct" // New struct

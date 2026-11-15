@@ -8,29 +8,32 @@ import (
 	"strings"
 	"text/template"
 
-	model "github.com/StoneTrench/go-mc-clone/bindings/generator/agnostic"
-	types "github.com/StoneTrench/go-mc-clone/bindings/generator/model"
-	"github.com/StoneTrench/go-mc-clone/bindings/generator/parser"
+	"github.com/StoneTrench/go-mc-clone/src/cli/gen/interm_repr"
+	"github.com/StoneTrench/go-mc-clone/src/cli/gen/parser"
+	"github.com/StoneTrench/go-mc-clone/src/cli/gen/types"
 )
 
 type Input struct {
-	Src  string
-	Lang string
-	Out  string
+	Src       string
+	Lang      string
+	Out       string
+	Templates string
 }
 
 func main() {
 	var (
-		src  = flag.String("s", "env.abi", "input `.abi` source file")
-		lang = flag.String("l", "go", "target language directory `target/<lang>/*.tmpl`")
-		out  = flag.String("o", "out", "output directory")
+		src       = flag.String("s", "env.abi", "input `.abi` source file")
+		lang      = flag.String("l", "go", "target language directory `<target>/<lang>/*.tmpl`")
+		out       = flag.String("o", "out", "output directory")
+		templates = flag.String("t", "target", "directoy containing the available language templates")
 	)
 	flag.Parse()
 
 	err := cli(&Input{
-		Src:  *src,
-		Lang: *lang,
-		Out:  *out,
+		Src:       *src,
+		Lang:      *lang,
+		Out:       *out,
+		Templates: *templates,
 	})
 
 	if err != nil {
@@ -54,7 +57,7 @@ func cli(input *Input) error {
 	if err != nil {
 		return err
 	}
-	path_tmpl_common, path_tmpl_guest, path_tmpl_host, err := discover_tmpl(input.Lang)
+	path_tmpl_common, path_tmpl_guest, path_tmpl_host, err := discover_tmpl(input.Templates, input.Lang)
 	if err != nil {
 		return fmt.Errorf("no template avaliable for target %q: %w", input.Lang, err)
 	}
@@ -103,7 +106,7 @@ func make_templates(path_tmpl_common, path_tmpl_guest, path_tmpl_host string, fu
 }
 func emit_modules(modules []parser.Module, t_coll *types.TypeCollection, tmpl_guest, tmpl_host *template.Template, out, lang string) error {
 	for _, m := range modules {
-		mod, err := model.BuildAgnosticModule(t_coll, m.Name, m.Types)
+		mod, err := interm_repr.BuildAgnosticModule(t_coll, m.Name, m.Types)
 		if err != nil {
 			return err
 		}
@@ -127,7 +130,7 @@ func emit_modules(modules []parser.Module, t_coll *types.TypeCollection, tmpl_gu
 	}
 	return nil
 }
-func emit_template(t *template.Template, name string, data *model.Module, out string) error {
+func emit_template(t *template.Template, name string, data *interm_repr.Module, out string) error {
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 		return err
 	}
@@ -142,8 +145,8 @@ func emit_template(t *template.Template, name string, data *model.Module, out st
 	}
 	return nil
 }
-func discover_tmpl(lang string) (path_tmpl_common, path_tmpl_guest, path_tmpl_host string, err error) {
-	tmplDir := filepath.Join("target", lang)
+func discover_tmpl(templates, lang string) (path_tmpl_common, path_tmpl_guest, path_tmpl_host string, err error) {
+	tmplDir := filepath.Join(templates, lang)
 	entries, err := os.ReadDir(tmplDir)
 	if err != nil {
 		return path_tmpl_common, path_tmpl_guest, path_tmpl_host,

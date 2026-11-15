@@ -1,11 +1,11 @@
-package intermediate_representation
+package interm_repr
 
 import (
 	"errors"
 	"fmt"
 	"strings"
 
-	. "github.com/StoneTrench/go-mc-clone/bindings/generator/model"
+	. "github.com/StoneTrench/go-mc-clone/src/cli/gen/types"
 )
 
 // NormalizedIdentifier converts an .abi identifier to an NormalizedIdentifier identifier:

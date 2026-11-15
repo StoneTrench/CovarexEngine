@@ -13,6 +13,6 @@ set -e
 # cd ../..
 # wit-bindgen markdown --out-dir ./docs/api ./bindings/wit
 
-cd ./bindings/generator
-go run main.go -lang go -src ./env.abi -out ../out/
-# go run main.go -lang c -src ./env.abi -out ../out/
+go run src/cli/gen/main.go -l go -s bindings/env.abi -o bindings/out/ -t bindings/target
+# go run main.go -l c -s ./env.abi -o ../out/
+go run src/cli/gen/main.go -h
