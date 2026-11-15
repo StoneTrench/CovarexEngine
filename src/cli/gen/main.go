@@ -8,9 +8,9 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/StoneTrench/go-mc-clone/src/cli/gen/interm_repr"
-	"github.com/StoneTrench/go-mc-clone/src/cli/gen/parser"
-	"github.com/StoneTrench/go-mc-clone/src/cli/gen/types"
+	"github.com/StoneTrench/CovarexEngine/src/cli/gen/interm_repr"
+	"github.com/StoneTrench/CovarexEngine/src/cli/gen/parser"
+	"github.com/StoneTrench/CovarexEngine/src/cli/gen/types"
 )
 
 type Input struct {

@@ -3,8 +3,8 @@ package network
 import (
 	"time"
 
-	"github.com/StoneTrench/go-mc-clone/src/engine/core/log"
-	"github.com/StoneTrench/go-mc-clone/src/engine/systems/network/protocol"
+	"github.com/StoneTrench/CovarexEngine/src/engine/core/log"
+	"github.com/StoneTrench/CovarexEngine/src/engine/systems/network/protocol"
 )
 
 type EventId uint8

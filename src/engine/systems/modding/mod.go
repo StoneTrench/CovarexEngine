@@ -7,7 +7,7 @@ import (
 	"path"
 
 	"github.com/Masterminds/semver/v3"
-	"github.com/StoneTrench/go-mc-clone/src/engine/platform/filesystem"
+	"github.com/StoneTrench/CovarexEngine/src/engine/platform/filesystem"
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
 )

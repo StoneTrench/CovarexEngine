@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"unsafe"
 
+	"github.com/StoneTrench/CovarexEngine/src/engine/resources"
+	"github.com/StoneTrench/CovarexEngine/src/game/world"
 	"github.com/StoneTrench/go-mat-lib/vec"
-	"github.com/StoneTrench/go-mc-clone/src/engine/resources"
-	"github.com/StoneTrench/go-mc-clone/src/game/world"
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 

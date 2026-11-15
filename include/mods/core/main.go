@@ -5,7 +5,7 @@ package main
 import (
 	"fmt"
 
-	eb "github.com/StoneTrench/go-mc-clone/bindings/out/go/guest"
+	eb "github.com/StoneTrench/CovarexEngine/bindings/out/go/guest"
 )
 
 func RegBlock(name string, r, g, b, a uint8, sld eb.BlockKind) {

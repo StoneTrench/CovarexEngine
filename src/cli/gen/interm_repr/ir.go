@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/StoneTrench/go-mc-clone/src/cli/gen/types"
+	"github.com/StoneTrench/CovarexEngine/src/cli/gen/types"
 )
 
 type TColl = types.TypeCollection

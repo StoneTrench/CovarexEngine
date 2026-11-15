@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	generated "github.com/StoneTrench/go-mc-clone/bindings/out/go/host"
+	generated "github.com/StoneTrench/CovarexEngine/bindings/out/go/host"
 	"github.com/tetratelabs/wazero"
 )
 

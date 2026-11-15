@@ -3,7 +3,7 @@ package interm_repr
 import (
 	"fmt"
 
-	"github.com/StoneTrench/go-mc-clone/src/cli/gen/types"
+	"github.com/StoneTrench/CovarexEngine/src/cli/gen/types"
 )
 
 type NameCount uint

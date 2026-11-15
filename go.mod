@@ -1,4 +1,4 @@
-module github.com/StoneTrench/go-mc-clone
+module github.com/StoneTrench/CovarexEngine
 
 go 1.27
 

@@ -3,8 +3,8 @@ package client
 import (
 	"math"
 
-	"github.com/StoneTrench/go-mc-clone/src/game/generation"
-	"github.com/StoneTrench/go-mc-clone/src/game/world"
+	"github.com/StoneTrench/CovarexEngine/src/game/generation"
+	"github.com/StoneTrench/CovarexEngine/src/game/world"
 )
 
 func BaseTerrain(i int, r generation.PhaseRuntime) world.Chunk {

@@ -1,10 +1,10 @@
 package generation
 
 import (
+	"github.com/StoneTrench/CovarexEngine/src/engine/core/async"
+	"github.com/StoneTrench/CovarexEngine/src/engine/resources"
+	"github.com/StoneTrench/CovarexEngine/src/game/world"
 	"github.com/StoneTrench/go-mat-lib/vec"
-	"github.com/StoneTrench/go-mc-clone/src/engine/core/async"
-	"github.com/StoneTrench/go-mc-clone/src/engine/resources"
-	"github.com/StoneTrench/go-mc-clone/src/game/world"
 )
 
 type Program struct {

@@ -5,7 +5,7 @@ package main
 import (
 	"embed"
 
-	"github.com/StoneTrench/go-mc-clone/src/engine/platform/filesystem"
+	"github.com/StoneTrench/CovarexEngine/src/engine/platform/filesystem"
 )
 
 //go:embed include

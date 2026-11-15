@@ -4,12 +4,12 @@ package client
 import (
 	"fmt"
 
+	"github.com/StoneTrench/CovarexEngine/src/engine/core/log"
+	"github.com/StoneTrench/CovarexEngine/src/engine/platform"
+	"github.com/StoneTrench/CovarexEngine/src/game"
+	"github.com/StoneTrench/CovarexEngine/src/game/generation"
+	"github.com/StoneTrench/CovarexEngine/src/game/world"
 	"github.com/StoneTrench/go-mat-lib/vec"
-	"github.com/StoneTrench/go-mc-clone/src/engine/core/log"
-	"github.com/StoneTrench/go-mc-clone/src/engine/platform"
-	"github.com/StoneTrench/go-mc-clone/src/game"
-	"github.com/StoneTrench/go-mc-clone/src/game/generation"
-	"github.com/StoneTrench/go-mc-clone/src/game/world"
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 

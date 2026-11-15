@@ -3,7 +3,7 @@ package main
 import (
 	"log/slog"
 
-	"github.com/StoneTrench/go-mc-clone/src/client"
+	"github.com/StoneTrench/CovarexEngine/src/client"
 )
 
 func main() {
