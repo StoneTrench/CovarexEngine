@@ -1,4 +1,4 @@
-package model
+package intermediate_representation
 
 import (
 	"fmt"

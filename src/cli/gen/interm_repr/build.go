@@ -1,4 +1,4 @@
-package model
+package intermediate_representation
 
 import (
 	"errors"
@@ -149,7 +149,6 @@ func decl_func_guest(c *TColl, mod *Module, name string, fn *TypeFunc) (*FuncDec
 		b.NopComment("send")
 		b.BufferPointer(N_BUFFER_INPUT_PTR)
 		b.BufferLength(N_BUFFER_INPUT_LEN)
-		fmt.Printf("Min buffer size: %d \n", b.BufferMinSize)
 		b.Block[instr_buf.Index].Integer = b.BufferMinSize
 		b.BufferMinSize = 0
 	}

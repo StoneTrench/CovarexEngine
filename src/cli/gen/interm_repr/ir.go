@@ -1,4 +1,4 @@
-package model
+package intermediate_representation
 
 import (
 	"fmt"
@@ -38,9 +38,9 @@ type FuncDecl struct {
 	Block        []Instr
 }
 type Instr struct {
-	Func *FuncDecl
+	Func  *FuncDecl
 	Index int
-	Kind string
+	Kind  string
 
 	Integer int
 	Text    string
@@ -208,8 +208,9 @@ var op_declare_unknown = "DeclareUnknown" // Declare but do not initialize a var
 var op_counter_init = "MakeCounter"           // New counter
 var op_counter_increment = "IncrementCounter" // Add 1 to counter
 
-var op_loop_fixed = "LoopFixed" // Loop a fixed known n times
-var op_loop_until = "LoopUntil" // Loop based on a value
+var op_loop_fixed = "LoopFixed"       // Loop a fixed known n times
+var op_loop_until = "LoopUntil"       // Loop based on a value
+var op_if_not_zero = "IfNotZeroBlock" // Single if statement that executes if input is not 0
 
 var op_buffer_make = "MakeBuffer"                 // Make buffer.
 var op_buffer_make_from_raw = "MakeBufferFromRaw" // Make buffer from pointer and length.
@@ -232,6 +233,7 @@ var op_buffer_io = map[TypePrimitive][2]string{
 	TypeP_f64: {"WriteBufF64", "ReadBufF64"},
 }
 var op_string_conv = [2]string{"StringToSlice", "SliceToString"}
+var op_pointer_conv = [2]string{"PointerToValue", "ValueToPointer"} // deref and ref
 var op_bool_conv = [2]string{"BoolToU8", "U8ToBool"}
 var op_usize_conv = [2]string{"UsizeToU32", "U32ToUsize"}
 
