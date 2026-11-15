@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"path"
 
-	"github.com/StoneTrench/go-mc-clone/bindings/host"
+	host "github.com/StoneTrench/go-mc-clone/bindings/out/go/host"
 	"github.com/StoneTrench/go-mc-clone/src/engine"
 	"github.com/StoneTrench/go-mc-clone/src/engine/core/log"
 	"github.com/StoneTrench/go-mc-clone/src/engine/platform"
@@ -42,7 +42,7 @@ func Init() error {
 		log.Error(err)
 	}
 	RegistryBlocks.Freeze()
-	_, err = RegistryBlocks.ApplyIdMap([]string{"core:air", "core:stone", "core:dirt", "core:grass", "core:water"})
+	_, err = RegistryBlocks.ApplyIdMap([]string{"me.stonetrench.core:air", "me.stonetrench.core:stone", "me.stonetrench.core:dirt", "me.stonetrench.core:grass", "me.stonetrench.core:water"})
 	if err != nil {
 		log.Error(err)
 	}
@@ -51,46 +51,56 @@ func Init() error {
 }
 
 func load_api(m *modding.HostModuleBuilder) {
-	m.Add(host.LogInfo(func(m api.Module, msg string) {
+	m.Add(host.HostAPILogInfo(func(m api.Module, msg string) {
 		slog.Info(fmt.Sprintf("(Mod) (%s) %s", m.Name(), msg))
 	}))
-	m.Add(host.LogWarn(func(m api.Module, msg string) {
+	m.Add(host.HostAPILogWarn(func(m api.Module, msg string) {
 		slog.Warn(fmt.Sprintf("(Mod) (%s) %s", m.Name(), msg))
 	}))
-	m.Add(host.LogError(func(m api.Module, msg string) {
+	m.Add(host.HostAPILogError(func(m api.Module, msg string) {
 		slog.Error(fmt.Sprintf("(Mod) (%s) %s", m.Name(), msg))
 	}))
 
-	m.Add(host.RegAddBlock(func(m api.Module, block host.BlockType) (namespaceid string) {
+	m.Add(host.HostAPIRegAddBlock(func(m api.Module, block host.BlockType) (namespaceid string) {
+		IsSolid := false
+		if block.Kind == host.E_Solid {
+			IsSolid = true
+		}
 		return RegistryBlocks.RegisterPanic(m.Name(), block.Name, world.BlockType{
 			Color:   color.RGBA(block.Color),
-			IsSolid: block.IsSolid,
+			IsSolid: IsSolid,
 		})
 	}))
-	m.Add(host.RegGetBlock(func(m api.Module, namespaceid string) (host.BlockType, host.OptError) {
+	m.Add(host.HostAPIRegGetBlock(func(m api.Module, namespaceid string) (host.BlockType, string) {
 		b, err := RegistryBlocks.GetByIdentifier(namespaceid)
-		wblock := host.BlockType{
-			Name:    namespaceid,
-			Color:   host.Color(b.Color),
-			IsSolid: b.IsSolid,
-		}
+		wblock := host.BlockType{}
 		if err != nil {
-			return wblock, &host.WError{err.Error()}
+			return wblock, err.Error()
 		}
-		return wblock, nil
+
+		wblock.Name = namespaceid
+		wblock.Color = host.ColorU8(b.Color)
+		var Kind host.BlockKind
+		if b.IsSolid {
+			Kind = host.E_Solid
+		} else {
+			Kind = host.E_Air
+		}
+		wblock.Kind = Kind
+		return wblock, ""
 	}))
-	m.Add(host.AppendLang(func(m api.Module, name string) host.OptError {
+	m.Add(host.HostAPIAppendLang(func(m api.Module, name string) string {
 		mod := modding.GetMod(m)
 		if mod == nil {
-			return &host.WError{"failed to append language resource: cant find this mod"}
+			return "failed to append language resource: cant find this mod"
 		}
 		if len(name) != 5 {
-			return &host.WError{"failed to append language resource: name must be 5 characters long"}
+			return "failed to append language resource: name must be 5 characters long"
 		}
 		err := resources.LangAppend(path.Join(mod.Folder, "assets", "lang", name+".json"))
 		if err != nil {
-			return &host.WError{fmt.Errorf("failed to append language resource: %w", err).Error()}
+			return fmt.Errorf("failed to append language resource: %w", err).Error()
 		}
-		return nil
+		return ""
 	}))
 }

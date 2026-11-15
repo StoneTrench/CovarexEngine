@@ -36,10 +36,10 @@ type t_Type struct {
 	Struct  *t_Struct  `parser:"| @@"`
 	Union   *t_Union   `parser:"| @@"`
 	Enum    *t_Enum    `parser:"| @@"`
-	Array   *t_Array   `parser:"| @@"`
 	Slice   *t_Slice   `parser:"| @@"`
 	Func    *t_Func    `parser:"| @@"`
 	Pointer *t_Pointer `parser:"| @@"`
+	Array   *t_Array   `parser:"| @@"`
 	Ident   *t_Ident   `parser:"| @@"`
 }
 
@@ -71,12 +71,12 @@ type t_Pointer struct {
 type t_Func struct {
 	Input []*t_Param `parser:"'fn' '(' (@@ (',' @@)*)? ')'"`
 	// Output []*P_Param `parser:"'(' (@@ (',' @@)*)? ')'"`
-	Output *t_Param `parser:"('(' @@? ')')?"`
+	Output []*t_Param `parser:"('(' (@@ (',' @@)*)? ')')?"`
 }
 
 type Module struct {
-	Name string
-	Decl []TypeField
+	Name  string
+	Types []TypeField
 }
 type module_decl struct {
 	Raw  *t_Decl
@@ -106,16 +106,16 @@ func convert_ident(c *TypeCollection, LUF fnLookup, node *t_Ident) (TypeRef, err
 		}), nil
 	}
 
-	new_decl := LUF
+	new_LUF := LUF
 	if len(node.Generics) > 0 {
-		gen_map := make(map[string]*t_Type)
+		local_generics_map := make(map[string]*t_Type)
 
 		for i := range node.Generics {
-			gen_map[decl.Raw.Generics[i]] = node.Generics[i]
+			local_generics_map[decl.Raw.Generics[i]] = node.Generics[i]
 		}
 
-		new_decl = func(name string) (module_decl, error) {
-			if t, ok := gen_map[name]; ok {
+		new_LUF = func(name string) (module_decl, error) {
+			if t, ok := local_generics_map[name]; ok {
 				return module_decl{
 					Raw: &t_Decl{
 						Name:     "",
@@ -125,11 +125,12 @@ func convert_ident(c *TypeCollection, LUF fnLookup, node *t_Ident) (TypeRef, err
 					Type: TypeRef_Invalid,
 				}, nil
 			}
+			// if name is not inside generics, then go up one level
 			return LUF(name)
 		}
 	}
 
-	ref, err := convert_type(c, new_decl, decl.Raw.Type)
+	ref, err := convert_type(c, new_LUF, decl.Raw.Type)
 	if err != nil {
 		return TypeRef_Invalid, err
 	}
@@ -145,10 +146,11 @@ func convert_ident(c *TypeCollection, LUF fnLookup, node *t_Ident) (TypeRef, err
 			Name: decl.Raw.Name,
 		}), nil
 	} else {
-		return c.Ref(TypeIdent{
-			Type: ref,
-			Name: fmt.Sprintf("%s-%d", decl.Raw.Name, ref),
-		}), nil
+		return ref, nil
+		// return c.Ref(TypeIdent{
+		// 	Type: ref,
+		// 	Name: fmt.Sprintf("%s-%d", decl.Raw.Name, ref),
+		// }), nil
 	}
 }
 func convert_primitive(name string) (TypePrimitive, error) {
@@ -218,7 +220,7 @@ func convert_slice(c *TypeCollection, LUF fnLookup, t *t_Slice) (TypeRef, error)
 	if err != nil {
 		return TypeRef_Invalid, err
 	}
-	return c.Ref(TypeArray{
+	return c.Ref(TypeSlice{
 		Type: e,
 	}), nil
 }
@@ -233,22 +235,17 @@ func convert_pointer(c *TypeCollection, LUF fnLookup, t *t_Pointer) (TypeRef, er
 	}), nil
 }
 func convert_func(c *TypeCollection, LUF fnLookup, t *t_Func) (TypeRef, error) {
-	params, err := convert_params(c, LUF, t.Input)
+	input, err := convert_params(c, LUF, t.Input)
 	if err != nil {
 		return TypeRef_Invalid, err
 	}
-	output, err := convert_param(c, LUF, t.Output)
+	output, err := convert_params(c, LUF, t.Output)
 	if err != nil {
 		return TypeRef_Invalid, err
-	}
-	out_params := []TypeParam{}
-	if output != nil {
-		output.Give = true // not borrow
-		out_params = append(out_params, *output)
 	}
 	return c.Ref(TypeFunc{
-		Input:  params,
-		Output: out_params,
+		Input:  input,
+		Output: output,
 	}), nil
 }
 func convert_type(c *TypeCollection, LUF fnLookup, t *t_Type) (TypeRef, error) {
@@ -274,79 +271,6 @@ func convert_type(c *TypeCollection, LUF fnLookup, t *t_Type) (TypeRef, error) {
 	return TypeRef_Invalid, fmt.Errorf("failed to parse type, everything was nil")
 }
 
-var LEXER = lexer.MustSimple([]lexer.SimpleRule{
-	{Name: "Comment", Pattern: `//[^\n]*`},
-	{Name: "Ident", Pattern: `[a-zA-Z_][a-zA-Z0-9_\-]*`},
-	{Name: "Punct", Pattern: `[{}()\[\],*<>]`}, // added '<' '>'
-	{Name: "Whitespace", Pattern: `[ \t\r\n;]+`},
-	{Name: "Int", Pattern: `[0-9][0-9]*`},
-})
-var PARSER = participle.MustBuild[t_SourceFile](
-	participle.Lexer(LEXER),
-	participle.Elide("Comment", "Whitespace"),
-)
-
-// var TYPE_PARSER = participle.MustBuild[t_Type](
-// 	participle.Lexer(LEXER),
-// 	participle.Elide("Comment", "Whitespace"),
-// )
-// func parse_must[T any](p *participle.Parser[T], s string) *T {
-// 	res, err := p.ParseBytes("must", []byte(s))
-// 	if err != nil {
-// 		panic(err)
-// 	}
-// 	return res
-// }
-// var TYPE_RESULT = &t_Decl{
-// 	Name:     "result",
-// 	Generics: []string{"T", "E"},
-// 	Type:     parse_must(TYPE_PARSER, "struct{Tag u8;Val union{Val T; Err E}}"),
-// }
-// var TYPE_OPTION = &t_Decl{
-// 	Name:     "option",
-// 	Generics: []string{"T"},
-// 	Type:     parse_must(TYPE_PARSER, "struct{Tag u8;Val T}"),
-// }
-
-func ParseSource(c *TypeCollection, name string) ([]Module, error) {
-	bits, err := os.ReadFile(name)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse file: %w", err)
-	}
-	return parse_bytes(c, name, bits)
-}
-func parse_bytes(c *TypeCollection, name string, bits []byte) ([]Module, error) {
-	src, err := PARSER.ParseBytes(name, bits)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse file: %w", err)
-	}
-	LUF := func(name string) (module_decl, error) {
-		// if name == "result" {
-		// 	return module_decl{
-		// 		Raw:  TYPE_RESULT,
-		// 		Type: TypeRef_Invalid,
-		// 	}, nil
-		// }
-		// if name == "option" {
-		// 	return module_decl{
-		// 		Raw:  TYPE_OPTION,
-		// 		Type: TypeRef_Invalid,
-		// 	}, nil
-		// }
-		var n module_decl
-		return n, fmt.Errorf("declaration %s doesn't exist", name)
-	}
-	result := make([]Module, len(src.Modules))
-	for i, mod := range src.Modules {
-		m, err := convert_module(c, LUF, mod)
-		if err != nil {
-			return nil, err
-		}
-		result[i] = *m
-	}
-	return result, nil
-}
-
 func convert_module(c *TypeCollection, LUF fnLookup, t *t_Module) (*Module, error) {
 	decl := make(map[string]int)
 	res_decl := []module_decl{}
@@ -366,7 +290,8 @@ func convert_module(c *TypeCollection, LUF fnLookup, t *t_Module) (*Module, erro
 		})
 	}
 
-	res_fields := []TypeField{}
+	res_types := []TypeField{}
+	// res_funcs := []TypeField{}
 	err_list := []error{}
 	for _, d := range res_decl {
 		if len(d.Raw.Generics) == 0 {
@@ -379,10 +304,20 @@ func convert_module(c *TypeCollection, LUF fnLookup, t *t_Module) (*Module, erro
 					continue
 				}
 			}
-			res_fields = append(res_fields, TypeField{
+			r := TypeField{
 				Name: d.Raw.Name,
 				Type: t,
-			})
+			}
+			res_types = append(res_types, r)
+			// switch d.Raw.Kind {
+			// case DECL_FN:
+			// 	res_funcs = append(res_funcs, r)
+			// case DECL_TYPE:
+			// 	res_types = append(res_types, r)
+			// default:
+			// 	err_list = append(err_list, fmt.Errorf("invalid kind of declaration: %s", d.Raw.Kind))
+			// 	continue
+			// }
 		}
 	}
 
@@ -391,7 +326,9 @@ func convert_module(c *TypeCollection, LUF fnLookup, t *t_Module) (*Module, erro
 	}
 
 	return &Module{
-		Name: t.Name, Decl: res_fields,
+		Name:  t.Name,
+		Types: res_types,
+		// Funcs: res_funcs,
 	}, nil
 }
 
@@ -432,4 +369,43 @@ func convert_fields(c *TypeCollection, LUF fnLookup, t []*t_Field) ([]TypeField,
 		}
 	}
 	return res, nil
+}
+
+var LEXER = lexer.MustSimple([]lexer.SimpleRule{
+	{Name: "Comment", Pattern: `//[^\n]*`},
+	{Name: "Ident", Pattern: `[a-zA-Z_][a-zA-Z0-9_\-]*`},
+	{Name: "Punct", Pattern: `[{}()\[\],*<>]`}, // added '<' '>'
+	{Name: "Whitespace", Pattern: `[ \t\r\n;]+`},
+	{Name: "Int", Pattern: `[0-9][0-9]*`},
+})
+var PARSER = participle.MustBuild[t_SourceFile](
+	participle.Lexer(LEXER),
+	participle.Elide("Comment", "Whitespace"),
+)
+
+func ParseSource(c *TypeCollection, name string) ([]Module, error) {
+	bits, err := os.ReadFile(name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse file: %w", err)
+	}
+	return parse_bytes(c, name, bits)
+}
+func parse_bytes(c *TypeCollection, name string, bits []byte) ([]Module, error) {
+	src, err := PARSER.ParseBytes(name, bits)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse file: %w", err)
+	}
+	LUF := func(name string) (module_decl, error) {
+		var n module_decl
+		return n, fmt.Errorf("declaration %s doesn't exist", name)
+	}
+	result := make([]Module, len(src.Modules))
+	for i, mod := range src.Modules {
+		m, err := convert_module(c, LUF, mod)
+		if err != nil {
+			return nil, err
+		}
+		result[i] = *m
+	}
+	return result, nil
 }

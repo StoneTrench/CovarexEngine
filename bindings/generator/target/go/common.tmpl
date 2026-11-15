@@ -1,0 +1,243 @@
+
+
+{{define "emit_Params" -}}
+{{range $i, $e := .}}{{if $i}}, {{end}}{{$e.Name}} {{template "emit_Type" $e.Type}}{{end}}
+{{- end}}
+
+{{define "emit_ParamNames" -}}
+{{range $i, $e := .}}{{if $i}}, {{end}}{{$e.Name}}{{end}}
+{{- end}}
+
+{{define "emit_ParamTypes" -}}
+{{range $i, $e := .}}{{if $i}}, {{end}}{{template "emit_Type" $e.Type}}{{end}}
+{{- end}}
+
+{{define "emit_Fields" -}}
+{{range $i, $e := .}}{{if $i}}; {{end}}{{$e.Name}} {{template "emit_Type" $e.Type}}{{end}}{{- end}}
+
+{{define "emit_Block" -}}
+{ {{- range . }}
+	{{template "emit_Instr" .}}
+{{- end}}
+}
+{{- end}}
+
+{{define "emit_Type" -}}{{template "impl_emit_Type" .}}{{end}}
+
+{{define "impl_emit_Type" -}}
+	{{- with GetTypeBody . -}}
+		{{- if eq .Kind "buffer" -}}[]byte
+		{{- else if eq .Kind "u8" -}}uint8
+		{{- else if eq .Kind "u16" -}}uint16
+		{{- else if eq .Kind "u32" -}}uint32
+		{{- else if eq .Kind "u64" -}}uint64
+
+		{{- else if eq .Kind "i8" -}}int8
+		{{- else if eq .Kind "i16" -}}int16
+		{{- else if eq .Kind "i32" -}}int32
+		{{- else if eq .Kind "i64" -}}int64
+
+		{{- else if eq .Kind "f32" -}}float32
+		{{- else if eq .Kind "f64" -}}float64
+
+		{{- else if eq .Kind "bool" -}}bool
+
+		{{- else if eq .Kind "string" -}}string
+		{{- else if eq .Kind "usize" -}}uint32
+
+		{{- else if eq .Kind "struct" -}} struct{ {{template "emit_Fields" .Fields}} }
+		{{- else if eq .Kind "union" -}} [{{.Size}}]byte
+		{{- else if eq .Kind "enum" -}} {{template "emit_Type" .Type}}
+		{{- else if eq .Kind "array" -}} [{{.Count}}]{{template "emit_Type" .Type}}
+		{{- else if eq .Kind "slice" -}} []{{template "emit_Type" .Type}}
+		{{- else if eq .Kind "pointer" -}} *{{template "emit_Type" .Type}}
+		{{- else if eq .Kind "func" -}} func({{template "emit_Params" .Input -}})({{template "emit_Params" .Output -}})
+		{{- else if eq .Kind "ident" -}} {{.Name}}
+		{{- else if eq .Kind "ident_unknown" -}} {{.Name}}
+		{{- else -}}TYPE_ERROR:{{.Kind}}
+		{{- end -}}
+	{{- end -}}
+{{- end}}
+
+{{define "emit_TypeDeclaration"}}
+	{{- $name := . -}}
+type {{$name.Name}} {{template "emit_Type" $name.Type}}
+{{with GetTypeBody $name.Type -}}
+		{{- if eq .Kind "enum" -}}
+{{range $i, $e := .Fields}}const E_{{$e}} = {{$i}}
+{{end}}
+		{{- end -}}
+	{{- end -}}
+{{end}}
+
+{{define "emit_Instr" -}}{{template "impl_emit_Instr" .}}{{end}}
+
+{{define "impl_emit_Instr" -}}
+	{{- if eq .Kind "Nop" -}}
+		{{- /* // {{.Text}} */ -}}
+	{{- else if eq .Kind "Return" -}}	
+		return {{template "emit_ParamNames" .Input}}
+	{{- else if eq .Kind "MakeBuffer" -}}	
+		{{(index .Output 0).Name}} := make({{template "emit_Type" (index .Output 0).Type}},0,{{.Integer}})
+	{{- else if eq .Kind "MakeBufferFromRaw" -}}	
+		{{(index .Output 0).Name}} := unsafe.Slice((*byte)(unsafe.Pointer(uintptr({{(index .Input 0).Name}}))), int({{(index .Input 1).Name}}))
+	{{- else if eq .Kind "FreeBuffer" -}}
+		if len({{(index .Input 0).Name}}) > 0 {
+			wasm_free(uint32(uintptr(unsafe.Pointer(&{{(index .Input 0).Name}}[0]))))
+		}
+	{{- else if eq .Kind "BufferPointer" -}}
+		var {{(index .Output 0).Name}} {{template "emit_Type" (index .Output 0).Type}} = 0
+		if len({{(index .Input 0).Name}}) > 0 {
+			{{(index .Output 0).Name}} = uint32(uintptr(unsafe.Pointer(&{{(index .Input 0).Name}}[0])))
+		}
+	{{- else if eq .Kind "BufferLength" -}}
+		{{(index .Output 0).Name}} := uint32(len({{(index .Input 0).Name}}))
+
+	{{- else if eq .Kind "WriteBufU8" -}}
+		{{(index .Input 0).Name}} = append({{(index .Input 0).Name}}, {{(index .Input 1).Name}})
+	{{- else if eq .Kind "WriteBufU16" -}}
+		{{(index .Input 0).Name}} = binary.LittleEndian.AppendUint16({{(index .Input 0).Name}}, {{(index .Input 1).Name}})
+	{{- else if eq .Kind "WriteBufU32" -}}
+		{{(index .Input 0).Name}} = binary.LittleEndian.AppendUint32({{(index .Input 0).Name}}, {{(index .Input 1).Name}})
+	{{- else if eq .Kind "WriteBufU64" -}}
+		{{(index .Input 0).Name}} = binary.LittleEndian.AppendUint64({{(index .Input 0).Name}}, {{(index .Input 1).Name}})
+	{{- else if eq .Kind "WriteBufI8" -}}
+		{{(index .Input 0).Name}} = append({{(index .Input 0).Name}}, uint8({{(index .Input 1).Name}}))
+	{{- else if eq .Kind "WriteBufI16" -}}
+		{{(index .Input 0).Name}} = binary.LittleEndian.AppendUint16({{(index .Input 0).Name}}, uint16({{(index .Input 1).Name}}))
+	{{- else if eq .Kind "WriteBufI32" -}}
+		{{(index .Input 0).Name}} = binary.LittleEndian.AppendUint32({{(index .Input 0).Name}}, uint32({{(index .Input 1).Name}}))
+	{{- else if eq .Kind "WriteBufI64" -}}
+		{{(index .Input 0).Name}} = binary.LittleEndian.AppendUint64({{(index .Input 0).Name}}, uint64({{(index .Input 1).Name}}))
+	{{- else if eq .Kind "WriteBufF32" -}}
+		{{(index .Input 0).Name}} = binary.LittleEndian.AppendUint32({{(index .Input 0).Name}}, math.Float32bits({{(index .Input 1).Name}}))
+	{{- else if eq .Kind "WriteBufF64" -}}
+		{{(index .Input 0).Name}} = binary.LittleEndian.AppendUint64({{(index .Input 0).Name}}, math.Float64bits({{(index .Input 1).Name}}))
+
+	{{- else if eq .Kind "ReadBufU8" -}}
+		{{(index .Output 0).Name}} := {{(index .Input 0).Name}}[0]
+		{{(index .Input 0).Name}} = {{(index .Input 0).Name}}[1:]
+	{{- else if eq .Kind "ReadBufU16" -}}
+		{{(index .Output 0).Name}} := binary.LittleEndian.Uint16({{(index .Input 0).Name}})
+		{{(index .Input 0).Name}} = {{(index .Input 0).Name}}[2:]
+	{{- else if eq .Kind "ReadBufU32" -}}
+		{{(index .Output 0).Name}} := binary.LittleEndian.Uint32({{(index .Input 0).Name}})
+		{{(index .Input 0).Name}} = {{(index .Input 0).Name}}[4:]
+	{{- else if eq .Kind "ReadBufU64" -}}
+		{{(index .Output 0).Name}} := binary.LittleEndian.Uint64({{(index .Input 0).Name}})
+		{{(index .Input 0).Name}} = {{(index .Input 0).Name}}[8:]
+	{{- else if eq .Kind "ReadBufI8" -}}
+		{{(index .Output 0).Name}} := int8({{(index .Input 0).Name}}[0])
+		{{(index .Input 0).Name}} = {{(index .Input 0).Name}}[1:]
+	{{- else if eq .Kind "ReadBufI16" -}}
+		{{(index .Output 0).Name}} := int16(binary.LittleEndian.Uint16({{(index .Input 0).Name}}))
+		{{(index .Input 0).Name}} = {{(index .Input 0).Name}}[2:]
+	{{- else if eq .Kind "ReadBufI32" -}}
+		{{(index .Output 0).Name}} := int32(binary.LittleEndian.Uint32({{(index .Input 0).Name}}))
+		{{(index .Input 0).Name}} = {{(index .Input 0).Name}}[4:]
+	{{- else if eq .Kind "ReadBufI64" -}}
+		{{(index .Output 0).Name}} := int64(binary.LittleEndian.Uint64({{(index .Input 0).Name}}))
+		{{(index .Input 0).Name}} = {{(index .Input 0).Name}}[8:]
+	{{- else if eq .Kind "ReadBufF32" -}}
+		{{(index .Output 0).Name}} := math.Float32frombits(binary.LittleEndian.Uint32({{(index .Input 0).Name}}))
+		{{(index .Input 0).Name}} = {{(index .Input 0).Name}}[4:]
+	{{- else if eq .Kind "ReadBufF64" -}}
+		{{(index .Output 0).Name}} := math.Float64frombits(binary.LittleEndian.Uint64({{(index .Input 0).Name}}))
+		{{(index .Input 0).Name}} = {{(index .Input 0).Name}}[8:]
+
+	{{- else if eq .Kind "StringToSlice" -}}
+		{{(index .Output 0).Name}} := []byte({{(index .Input 0).Name}})
+	{{- else if eq .Kind "SliceToString" -}}
+		{{(index .Output 0).Name}} := string({{(index .Input 0).Name}})
+	{{- else if eq .Kind "SliceLength" -}}
+		{{(index .Output 0).Name}} := uint32(len({{(index .Input 0).Name}}))
+
+	{{- else if eq .Kind "UsizeToU32" -}}
+		{{(index .Output 0).Name}} := {{(index .Input 0).Name}}
+	{{- else if eq .Kind "U32ToUsize" -}}
+		{{(index .Output 0).Name}} := {{(index .Input 0).Name}}
+
+	{{- else if eq .Kind "BoolToU8" -}}
+		var {{(index .Output 0).Name}} uint8 = 0;if {{(index .Input 0).Name}} { {{(index .Output 0).Name}} = 1 }
+	{{- else if eq .Kind "U8ToBool" -}}
+		{{(index .Output 0).Name}} := {{(index .Input 0).Name}} == 1
+
+	{{- else if eq .Kind "EnumToU8" -}}
+		{{(index .Output 0).Name}} := uint8({{(index .Input 0).Name}})
+	{{- else if eq .Kind "EnumToU16" -}}
+		{{(index .Output 0).Name}} := uint16({{(index .Input 0).Name}})
+	{{- else if eq .Kind "EnumToU32" -}}
+		{{(index .Output 0).Name}} := uint32({{(index .Input 0).Name}})
+	{{- else if eq .Kind "EnumToU64" -}}
+		{{(index .Output 0).Name}} := uint64({{(index .Input 0).Name}})
+	{{- else if eq .Kind "EnumToI8" -}}
+		{{(index .Output 0).Name}} := int8({{(index .Input 0).Name}})
+	{{- else if eq .Kind "EnumToI16" -}}
+		{{(index .Output 0).Name}} := int16({{(index .Input 0).Name}})
+	{{- else if eq .Kind "EnumToI32" -}}
+		{{(index .Output 0).Name}} := int32({{(index .Input 0).Name}})
+	{{- else if eq .Kind "EnumToI64" -}}
+		{{(index .Output 0).Name}} := int64({{(index .Input 0).Name}})
+
+	{{- else if eq .Kind "U8ToEnum" -}}
+		{{(index .Output 0).Name}} := ({{template "emit_Type" (index .Output 0).Type}})({{(index .Input 0).Name}})
+	{{- else if eq .Kind "U16ToEnum" -}}
+		{{(index .Output 0).Name}} := ({{template "emit_Type" (index .Output 0).Type}})({{(index .Input 0).Name}})
+	{{- else if eq .Kind "U32ToEnum" -}}
+		{{(index .Output 0).Name}} := ({{template "emit_Type" (index .Output 0).Type}})({{(index .Input 0).Name}})
+	{{- else if eq .Kind "U64ToEnum" -}}
+		{{(index .Output 0).Name}} := ({{template "emit_Type" (index .Output 0).Type}})({{(index .Input 0).Name}})
+	{{- else if eq .Kind "I8ToEnum" -}}
+		{{(index .Output 0).Name}} := ({{template "emit_Type" (index .Output 0).Type}})({{(index .Input 0).Name}})
+	{{- else if eq .Kind "I16ToEnum" -}}
+		{{(index .Output 0).Name}} := ({{template "emit_Type" (index .Output 0).Type}})({{(index .Input 0).Name}})
+	{{- else if eq .Kind "I32ToEnum" -}}
+		{{(index .Output 0).Name}} := ({{template "emit_Type" (index .Output 0).Type}})({{(index .Input 0).Name}})
+	{{- else if eq .Kind "I64ToEnum" -}}
+		{{(index .Output 0).Name}} := ({{template "emit_Type" (index .Output 0).Type}})({{(index .Input 0).Name}})
+
+	{{- else if eq .Kind "MakeStruct" -}}
+		var {{(index .Output 0).Name}} {{template "emit_Type" (index .Output 0).Type}}
+	{{- else if eq .Kind "MakeSlice" -}}
+		{{(index .Output 0).Name}} := make({{template "emit_Type" (index .Output 0).Type}},{{(index .Input 0).Name}})
+	{{- else if eq .Kind "MakeArray" -}}
+		var {{(index .Output 0).Name}} {{template "emit_Type" (index .Output 0).Type}}
+	{{- else if eq .Kind "DeclareUnknown" -}}
+		var {{(index .Output 0).Name}} {{template "emit_Type" (index .Output 0).Type}}
+	{{- else if eq .Kind "MakeCounter" -}}
+		var {{(index .Output 0).Name}} {{template "emit_Type" (index .Output 0).Type}} = 0
+
+	{{- else if eq .Kind "IncrementCounter" -}}
+		{{(index .Input 0).Name}} += 1
+		
+	{{- else if eq .Kind "ReadStruct" -}}
+		{{(index .Output 0).Name}} := {{(index .Input 0).Name}}.{{.Text}}
+	{{- else if eq .Kind "ReadArray" -}}
+		{{(index .Output 0).Name}} := {{(index .Input 0).Name}}[{{(index .Input 1).Name}}]
+	{{- else if eq .Kind "ReadSlice" -}}
+		{{(index .Output 0).Name}} := {{(index .Input 0).Name}}[{{(index .Input 1).Name}}]
+		
+	{{- else if eq .Kind "WriteStruct" -}}
+		{{(index .Input 0).Name}}.{{.Text}} = {{(index .Input 1).Name}}
+	{{- else if eq .Kind "WriteArray" -}}
+		{{(index .Input 0).Name}}[{{(index .Input 1).Name}}] = {{(index .Input 2).Name}}
+	{{- else if eq .Kind "WriteSlice" -}}
+		{{(index .Input 0).Name}}[{{(index .Input 1).Name}}] = {{(index .Input 2).Name}}
+
+	{{- else if eq .Kind "LoopFixed" -}}
+		for range {{.Integer}} {{template "emit_Block" .Block}}
+	{{- else if eq .Kind "LoopUntil" -}}
+		for {{(index .Input 0).Name}} < {{(index .Input 1).Name}} {{template "emit_Block" .Block}}
+	
+	{{- else if eq .Kind "CallWireIO" -}}
+		_{{.Func.Module.Name}}_{{.Func.Name}}({{(index .Input 0).Name}}, {{(index .Input 1).Name}}, uint32(uintptr(unsafe.Pointer(&{{(index .Input 2).Name}}))), uint32(uintptr(unsafe.Pointer(&{{(index .Input 3).Name}}))))
+	{{- else if eq .Kind "CallWireI" -}}
+		_{{.Func.Module.Name}}_{{.Func.Name}}({{(index .Input 0).Name}}, {{(index .Input 1).Name}})
+	{{- else if eq .Kind "CallWireO" -}}
+		_{{.Func.Module.Name}}_{{.Func.Name}}(uint32(uintptr(unsafe.Pointer(&{{(index .Input 0).Name}}))), uint32(uintptr(unsafe.Pointer(&{{(index .Input 1).Name}}))))
+	{{- else if eq .Kind "CallWireEmpty" -}}
+		_{{.Func.Module.Name}}_{{.Func.Name}}()
+	{{- else -}}INSTR_ERROR:{{.String}}
+	{{- end -}}
+	{{/* // {{.String}} */}}
+{{- end}}

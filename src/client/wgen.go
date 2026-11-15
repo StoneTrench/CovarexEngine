@@ -8,13 +8,13 @@ import (
 )
 
 func BaseTerrain(i int, r generation.PhaseRuntime) world.Chunk {
-	air := r.LookupId("core:air")
-	stone := r.LookupId("core:stone")
-	dirt := r.LookupId("core:dirt")
-	grass := r.LookupId("core:grass")
-	water := r.LookupId("core:water")
-	sand := r.LookupId("core:sand")
-	snow := r.LookupId("core:snow")
+	air := r.LookupId("me.stonetrench.core:air")
+	stone := r.LookupId("me.stonetrench.core:stone")
+	dirt := r.LookupId("me.stonetrench.core:dirt")
+	grass := r.LookupId("me.stonetrench.core:grass")
+	water := r.LookupId("me.stonetrench.core:water")
+	sand := r.LookupId("me.stonetrench.core:sand")
+	snow := r.LookupId("me.stonetrench.core:snow")
 
 	res := world.Chunk{}
 
@@ -59,10 +59,10 @@ func BaseTerrain(i int, r generation.PhaseRuntime) world.Chunk {
 }
 
 func CarveCaves(i int, r generation.PhaseRuntime) world.Chunk {
-	air := r.LookupId("core:air")
-	stone := r.LookupId("core:stone")
-	dirt := r.LookupId("core:dirt")
-	grass := r.LookupId("core:grass")
+	air := r.LookupId("me.stonetrench.core:air")
+	stone := r.LookupId("me.stonetrench.core:stone")
+	dirt := r.LookupId("me.stonetrench.core:dirt")
+	grass := r.LookupId("me.stonetrench.core:grass")
 
 	res := r.Results[i-1]
 
@@ -91,12 +91,12 @@ func CarveCaves(i int, r generation.PhaseRuntime) world.Chunk {
 }
 
 func Decorate(i int, r generation.PhaseRuntime) world.Chunk {
-	air := r.LookupId("core:air")
-	stone := r.LookupId("core:stone")
-	grass := r.LookupId("core:grass")
-	iron := r.LookupId("core:iron_ore")
-	log := r.LookupId("core:log")
-	leaves := r.LookupId("core:leaves")
+	air := r.LookupId("me.stonetrench.core:air")
+	stone := r.LookupId("me.stonetrench.core:stone")
+	grass := r.LookupId("me.stonetrench.core:grass")
+	iron := r.LookupId("me.stonetrench.core:iron_ore")
+	log := r.LookupId("me.stonetrench.core:log")
+	leaves := r.LookupId("me.stonetrench.core:leaves")
 
 	res := r.Results[i-1]
 

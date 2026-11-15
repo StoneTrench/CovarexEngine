@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/StoneTrench/go-mc-clone/bindings/host"
+	generated "github.com/StoneTrench/go-mc-clone/bindings/out/go/host"
 	"github.com/tetratelabs/wazero"
 )
 
@@ -25,8 +25,8 @@ func (g *HostModuleBuilder) Init(ctx context.Context, rt wazero.Runtime, name st
 	g.module = g.rt.NewHostModuleBuilder(name)
 	return g
 }
-func (g *HostModuleBuilder) Add(b host.HostBinding) *HostModuleBuilder {
-	g.module.NewFunctionBuilder().WithFunc(b.Fn).Export(b.Name)
+func (g *HostModuleBuilder) Add(b generated.HostBinding) *HostModuleBuilder {
+	g.module.NewFunctionBuilder().WithFunc(b.Method).Export(b.Name)
 	return g
 }
 func (g *HostModuleBuilder) Instantiate(ctx context.Context) error {

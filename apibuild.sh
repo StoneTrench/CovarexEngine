@@ -15,3 +15,4 @@ set -e
 
 cd ./bindings/generator
 go run main.go -lang go -src ./env.abi -out ../out/
+# go run main.go -lang c -src ./env.abi -out ../out/

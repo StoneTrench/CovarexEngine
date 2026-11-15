@@ -1,0 +1,81 @@
+{{define "emit_FuncDecl" -}}
+func {{.Name}}({{template "emit_Params" .Input}})({{template "emit_ParamTypes" .Output}})
+{{- template "emit_Block" .Block}}
+{{- end}}
+
+{{block "main" . -}}
+// module {{.Name}}
+package generated
+
+import (
+	"encoding/binary"
+	"math"
+	"context"
+	"github.com/tetratelabs/wazero/api"
+	"fmt"
+)
+
+type HostBinding struct {
+	Name string
+	Method any
+}
+
+{{range .Types}}{{template "emit_TypeDeclaration" .}}{{end}}
+{{range .Host}}{{template "emit_FuncDecl" .}}
+{{end}}
+{{- end}}
+
+{{define "emit_call_args" -}}
+	{{range $i, $e := . -}}
+		{{if lt 0 $i -}}
+			{{- /* {{- if lt 1 $i -}},{{- end -}} */ -}}
+			,{{$e.Name}}
+		{{- end}}
+	{{- end}}
+{{- end}}
+
+{{define "emit_simple_params" -}}
+	{{range $i, $e := . -}}
+		,{{$e.Name}} {{template "emit_Type" $e.Type}}
+	{{- end}}
+{{- end}}
+
+{{define "emit_Instr" -}}
+	{{- if eq .Kind "Nop" -}}
+	{{- else if eq .Kind "Call" -}}
+
+		{{template "emit_ParamNames" .Output -}}
+		{{if gt (len .Output) 0}}:={{end -}}
+		{{(index .Input 0).Name}}(mod {{template "emit_call_args" .Input}})
+
+	{{- else if eq .Kind "MakeHostBinding" -}}
+
+		{{(index .Output 0).Name}} := {{template "emit_Type" (index .Output 0).Type}} {
+			Name: {{printf "%q" .Func.WasmName}},
+			Method: func({{template "emit_Params" .Input}}) {{template "emit_Block" .Block}},
+		}
+
+	{{- else if eq .Kind "WriteMemoryU32" -}}
+		mod.Memory().WriteUint32Le({{(index .Input 0).Name}}, {{(index .Input 1).Name}})
+		
+	{{- else if eq .Kind "MakeBufferFromRaw" -}}
+		{{(index .Output 0).Name}}, __ok := mod.Memory().Read({{(index .Input 0).Name}}, {{(index .Input 1).Name}})		
+		if !__ok { panic(fmt.Errorf("failed to copy buffer from guest [%d %d]", {{(index .Input 0).Name}}, {{(index .Input 1).Name}})) }
+
+	{{- else if eq .Kind "BufferPointer" -}}
+		var {{(index .Output 0).Name}} {{template "emit_Type" (index .Output 0).Type}}
+		__len :=len({{(index .Input 0).Name}})
+		if __len > 0 {
+			__res, __err := mod.ExportedFunction("malloc").Call(ctx, uint64(__len))
+			if __err != nil { panic(__err) }
+			{{(index .Output 0).Name}} = uint32(__res[0])
+			mod.Memory().Write({{(index .Output 0).Name}}, {{(index .Input 0).Name}})
+		}
+
+	{{- else if eq .Kind "FreeBuffer" -}}
+		// Free buffer {{(index .Input 0).Name}}
+	{{- else -}}{{template "impl_emit_Instr" .}}
+	{{- end -}}
+	{{- /* {{.StringPadding 1 " "}} */ -}}
+	{{/* //{{- .String -}} */}}
+{{- end}}

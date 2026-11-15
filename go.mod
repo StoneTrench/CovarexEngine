@@ -1,23 +1,20 @@
 module github.com/StoneTrench/go-mc-clone
 
-go 1.26.2
+go 1.27
 
 require (
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/StoneTrench/go-mat-lib v1.0.0
+	github.com/alecthomas/participle/v2 v2.1.4
+	github.com/gen2brain/raylib-go/raylib v0.60.1
 	github.com/tetratelabs/wazero v1.12.0
 	golang.org/x/exp v0.0.0-20260908205506-85c1c2202aba
 )
 
 require (
-	github.com/gen2brain/raylib-go/raylib v0.60.1
-	golang.org/x/sys v0.48.0 // indirect
-)
-
-require (
-	github.com/alecthomas/participle/v2 v2.1.4
 	github.com/ebitengine/purego v0.10.0 // indirect
 	github.com/jupiterrider/ffi v0.7.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
 )
 
 replace (
