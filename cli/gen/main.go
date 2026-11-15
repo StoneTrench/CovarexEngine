@@ -3,45 +3,53 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/fs"
 	"os"
-	"path/filepath"
+	"path"
 	"strings"
 	"text/template"
 
-	"github.com/StoneTrench/CovarexEngine/src/cli/gen/interm_repr"
-	"github.com/StoneTrench/CovarexEngine/src/cli/gen/parser"
-	"github.com/StoneTrench/CovarexEngine/src/cli/gen/types"
+	"embed"
+
+	"github.com/StoneTrench/CovarexEngine/cli/gen/interm_repr"
+	"github.com/StoneTrench/CovarexEngine/cli/gen/parser"
+	"github.com/StoneTrench/CovarexEngine/cli/gen/types"
 )
 
-type Input struct {
-	Src       string
-	Lang      string
-	Out       string
-	Templates string
+//go:embed target/*/*
+var EMBED embed.FS
+
+type Config struct {
+	Src  string
+	Lang string
+	Out  string
 }
 
-func main() {
+func parseFlags() *Config {
 	var (
-		src       = flag.String("s", "env.abi", "input `.abi` source file")
-		lang      = flag.String("l", "go", "target language directory `<target>/<lang>/*.tmpl`")
-		out       = flag.String("o", "out", "output directory")
-		templates = flag.String("t", "target", "directoy containing the available language templates")
+		src  = flag.String("s", "env.abi", "input `.abi` source file")
+		lang = flag.String("l", "go", "target language directory `<target>/<lang>/*.tmpl`")
+		out  = flag.String("o", "out", "output directory")
 	)
 	flag.Parse()
 
-	err := cli(&Input{
-		Src:       *src,
-		Lang:      *lang,
-		Out:       *out,
-		Templates: *templates,
-	})
-
-	if err != nil {
-		panic(fmt.Errorf("%w\n%s", err, flag.ErrHelp))
+	return &Config{
+		Src:  *src,
+		Lang: *lang,
+		Out:  *out,
 	}
 }
 
-func cli(input *Input) error {
+func main() {
+	c := parseFlags()
+
+	if err := cli(c); err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(1)
+	}
+}
+
+func cli(input *Config) error {
 	t_coll := new(types.TypeCollection).Init()
 	funcs_map := template.FuncMap{
 		"GetTypeBody": func(t types.TypeRef) types.IType {
@@ -57,7 +65,7 @@ func cli(input *Input) error {
 	if err != nil {
 		return err
 	}
-	path_tmpl_common, path_tmpl_guest, path_tmpl_host, err := discover_tmpl(input.Templates, input.Lang)
+	path_tmpl_common, path_tmpl_guest, path_tmpl_host, err := discover_tmpl("target", input.Lang)
 	if err != nil {
 		return fmt.Errorf("no template avaliable for target %q: %w", input.Lang, err)
 	}
@@ -78,12 +86,12 @@ func make_templates(path_tmpl_common, path_tmpl_guest, path_tmpl_host string, fu
 		tmpl_guest = template.New("GuestTemplate").Funcs(funcs_map)
 
 		if len(path_tmpl_common) > 0 {
-			tmpl_guest, err = tmpl_guest.ParseFiles(path_tmpl_common)
+			tmpl_guest, err = tmpl_guest.ParseFS(EMBED, path_tmpl_common)
 			if err != nil {
 				return nil, nil, err
 			}
 		}
-		tmpl_guest, err = tmpl_guest.ParseFiles(path_tmpl_guest)
+		tmpl_guest, err = tmpl_guest.ParseFS(EMBED, path_tmpl_guest)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -92,12 +100,12 @@ func make_templates(path_tmpl_common, path_tmpl_guest, path_tmpl_host string, fu
 		tmpl_host = template.New("HostTemplate").Funcs(funcs_map)
 
 		if len(path_tmpl_common) > 0 {
-			tmpl_host, err = tmpl_host.ParseFiles(path_tmpl_common)
+			tmpl_host, err = tmpl_host.ParseFS(EMBED, path_tmpl_common)
 			if err != nil {
 				return nil, nil, err
 			}
 		}
-		tmpl_host, err = tmpl_host.ParseFiles(path_tmpl_host)
+		tmpl_host, err = tmpl_host.ParseFS(EMBED, path_tmpl_host)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -113,7 +121,7 @@ func emit_modules(modules []parser.Module, t_coll *types.TypeCollection, tmpl_gu
 		var dest string
 
 		if tmpl_guest != nil {
-			dest = filepath.Join(out, lang, "guest", m.Name+"."+lang)
+			dest = path.Join(out, lang, "guest", m.Name+"."+lang)
 			err := emit_template(tmpl_guest, "main", mod, dest)
 			if err != nil {
 				return err
@@ -121,7 +129,7 @@ func emit_modules(modules []parser.Module, t_coll *types.TypeCollection, tmpl_gu
 		}
 
 		if tmpl_host != nil {
-			dest = filepath.Join(out, lang, "host", m.Name+"."+lang)
+			dest = path.Join(out, lang, "host", m.Name+"."+lang)
 			err := emit_template(tmpl_host, "main", mod, dest)
 			if err != nil {
 				return err
@@ -131,7 +139,7 @@ func emit_modules(modules []parser.Module, t_coll *types.TypeCollection, tmpl_gu
 	return nil
 }
 func emit_template(t *template.Template, name string, data *interm_repr.Module, out string) error {
-	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
+	if err := os.MkdirAll(path.Dir(out), 0o755); err != nil {
 		return err
 	}
 	f, err := os.Create(out)
@@ -145,9 +153,10 @@ func emit_template(t *template.Template, name string, data *interm_repr.Module, 
 	}
 	return nil
 }
+
 func discover_tmpl(templates, lang string) (path_tmpl_common, path_tmpl_guest, path_tmpl_host string, err error) {
-	tmplDir := filepath.Join(templates, lang)
-	entries, err := os.ReadDir(tmplDir)
+	tmplDir := path.Join(templates, lang)
+	entries, err := fs.ReadDir(EMBED, tmplDir)
 	if err != nil {
 		return path_tmpl_common, path_tmpl_guest, path_tmpl_host,
 			err
@@ -159,11 +168,11 @@ func discover_tmpl(templates, lang string) (path_tmpl_common, path_tmpl_guest, p
 		if !e.IsDir() && strings.HasSuffix(name, ".tmpl") && !strings.HasPrefix(name, ".") {
 			switch name {
 			case "common.tmpl":
-				path_tmpl_common = filepath.Join(tmplDir, e.Name())
+				path_tmpl_common = path.Join(tmplDir, e.Name())
 			case "guest.tmpl":
-				path_tmpl_guest = filepath.Join(tmplDir, e.Name())
+				path_tmpl_guest = path.Join(tmplDir, e.Name())
 			case "host.tmpl":
-				path_tmpl_host = filepath.Join(tmplDir, e.Name())
+				path_tmpl_host = path.Join(tmplDir, e.Name())
 			default:
 				return path_tmpl_common, path_tmpl_guest, path_tmpl_host,
 					fmt.Errorf("valid names are, in lowercase 'common.tmpl', 'guest.tmpl', 'host.tmpl' ('.' prefix makes a file hidden)")

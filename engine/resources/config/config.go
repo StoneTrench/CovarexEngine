@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 
-	"github.com/StoneTrench/CovarexEngine/src/engine/platform"
-	"github.com/StoneTrench/CovarexEngine/src/engine/platform/filesystem"
+	"github.com/StoneTrench/CovarexEngine/engine/platform"
+	"github.com/StoneTrench/CovarexEngine/engine/platform/filesystem"
 )
 
 type Config struct {

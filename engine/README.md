@@ -20,11 +20,12 @@ The engine is made of multiple layers, like an onion. Each layer is only aware o
 	+ ECS
 	+ Animation
 	+ Networking
+
 + Game
 	+ Game state
 	+ Game tick
 	+ Modding api
 
-The following are siblings:
+The following should be siblings:
 + Server: synchronises game state between clients.
 + Client: keep track of game state from server. It is the player interface. Rendering.

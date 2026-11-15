@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	generated "github.com/StoneTrench/CovarexEngine/bindings/out/go/host"
 	"github.com/tetratelabs/wazero"
 )
 
@@ -20,12 +19,17 @@ type HostModuleBuilder struct {
 	module wazero.HostModuleBuilder
 }
 
+type HostBinding = struct {
+	Name   string
+	Method any
+}
+
 func (g *HostModuleBuilder) Init(ctx context.Context, rt wazero.Runtime, name string) *HostModuleBuilder {
 	g.rt = rt
 	g.module = g.rt.NewHostModuleBuilder(name)
 	return g
 }
-func (g *HostModuleBuilder) Add(b generated.HostBinding) *HostModuleBuilder {
+func (g *HostModuleBuilder) Add(b HostBinding) *HostModuleBuilder {
 	g.module.NewFunctionBuilder().WithFunc(b.Method).Export(b.Name)
 	return g
 }

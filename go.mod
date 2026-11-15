@@ -1,25 +1,12 @@
 module github.com/StoneTrench/CovarexEngine
 
-go 1.27
+go 1.27.0
 
 require (
 	github.com/Masterminds/semver/v3 v3.5.0
-	github.com/StoneTrench/go-mat-lib v1.0.0
 	github.com/alecthomas/participle/v2 v2.1.4
-	github.com/gen2brain/raylib-go/raylib v0.60.1
 	github.com/tetratelabs/wazero v1.12.0
 	golang.org/x/exp v0.0.0-20260908205506-85c1c2202aba
 )
 
-require (
-	github.com/ebitengine/purego v0.10.0 // indirect
-	github.com/jupiterrider/ffi v0.7.0 // indirect
-	golang.org/x/sys v0.48.0 // indirect
-)
-
-replace (
-	// github.com/BrownNPC/Raylib-Go-Wasm/wasm-runtime => ./Raylib-Go-Wasm/wasm-runtime
-	github.com/StoneTrench/go-mat-lib => ../GoMatLib
-// github.com/gen2brain/raylib-go/raygui => ./Raylib-Go-Wasm/raygui
-// github.com/gen2brain/raylib-go/raylib => ./Raylib-Go-Wasm/raylib
-)
+require golang.org/x/sys v0.48.0 // indirect

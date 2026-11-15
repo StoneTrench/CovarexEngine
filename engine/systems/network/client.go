@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/StoneTrench/CovarexEngine/src/engine/core/events"
-	"github.com/StoneTrench/CovarexEngine/src/engine/core/log"
-	"github.com/StoneTrench/CovarexEngine/src/engine/systems/network/protocol"
+	"github.com/StoneTrench/CovarexEngine/engine/core/events"
+	"github.com/StoneTrench/CovarexEngine/engine/core/log"
+	"github.com/StoneTrench/CovarexEngine/engine/systems/network/protocol"
 )
 
 type Client struct {

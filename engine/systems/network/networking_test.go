@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/StoneTrench/CovarexEngine/src/engine/core/log"
-	"github.com/StoneTrench/CovarexEngine/src/engine/systems/network"
+	"github.com/StoneTrench/CovarexEngine/engine/core/log"
+	"github.com/StoneTrench/CovarexEngine/engine/systems/network"
 )
 
 func Test(t *testing.T) {

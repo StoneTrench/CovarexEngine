@@ -1,1 +1,0 @@
-rm -f ./_out/logs/*.gz

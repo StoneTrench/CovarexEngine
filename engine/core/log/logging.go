@@ -9,7 +9,7 @@ import (
 	"path"
 	"time"
 
-	"github.com/StoneTrench/CovarexEngine/src/engine/platform"
+	"github.com/StoneTrench/CovarexEngine/engine/platform"
 )
 
 // Helper function for log file management.

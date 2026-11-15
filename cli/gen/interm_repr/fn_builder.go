@@ -3,7 +3,7 @@ package interm_repr
 import (
 	"fmt"
 
-	"github.com/StoneTrench/CovarexEngine/src/cli/gen/types"
+	"github.com/StoneTrench/CovarexEngine/cli/gen/types"
 )
 
 type fnBuilder struct {

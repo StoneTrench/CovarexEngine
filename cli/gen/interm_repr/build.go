@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	. "github.com/StoneTrench/CovarexEngine/src/cli/gen/types"
+	. "github.com/StoneTrench/CovarexEngine/cli/gen/types"
 )
 
 // NormalizedIdentifier converts an .abi identifier to an NormalizedIdentifier identifier:

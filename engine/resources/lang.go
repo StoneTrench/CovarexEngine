@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/StoneTrench/CovarexEngine/src/engine/platform/filesystem"
+	"github.com/StoneTrench/CovarexEngine/engine/platform/filesystem"
 )
 
 var language_map map[string]string = make(map[string]string)

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"path"
 
-	fs "github.com/StoneTrench/CovarexEngine/src/engine/platform/filesystem"
+	fs "github.com/StoneTrench/CovarexEngine/engine/platform/filesystem"
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
 )

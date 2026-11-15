@@ -10,19 +10,19 @@ import (
 type DirEntry = fs.DirEntry
 
 func Open(name string) (io.ReadCloser, error) {
-	return open(name)
+	return impl_open(name)
 }
 func Create(name string) (io.ReadWriteCloser, error) {
-	return create(name)
+	return impl_create(name)
 }
 func WriteFile(name string, data []byte) error {
-	return writeFile(name, data)
+	return impl_writeFile(name, data)
 }
 func ReadFile(name string) ([]byte, error) {
-	return readFile(name)
+	return impl_readFile(name)
 }
 func ReadDir(name string) ([]fs.DirEntry, error) {
-	return readDir(name)
+	return impl_readDir(name)
 }
 func OpenOrCreate(name string) (io.ReadCloser, error) {
 	file, err := Open(name)

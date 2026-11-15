@@ -7,18 +7,18 @@ import (
 	"os"
 )
 
-func open(name string) (io.ReadCloser, error) {
+func impl_open(name string) (io.ReadCloser, error) {
 	return os.Open(name)
 }
-func create(name string) (io.ReadWriteCloser, error) {
+func impl_create(name string) (io.ReadWriteCloser, error) {
 	return os.Create(name)
 }
-func writeFile(name string, data []byte) error {
+func impl_writeFile(name string, data []byte) error {
 	return os.WriteFile(name, data, 0644)
 }
-func readFile(name string) ([]byte, error) {
+func impl_readFile(name string) ([]byte, error) {
 	return os.ReadFile(name)
 }
-func readDir(name string) ([]DirEntry, error) {
+func impl_readDir(name string) ([]DirEntry, error) {
 	return os.ReadDir(name)
 }

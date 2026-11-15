@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	. "github.com/StoneTrench/CovarexEngine/src/cli/gen/types"
+	. "github.com/StoneTrench/CovarexEngine/cli/gen/types"
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
 )

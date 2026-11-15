@@ -26,13 +26,13 @@ func embedPath(name string) string {
 	return "include/" + rel
 }
 
-func open(name string) (io.ReadCloser, error) {
+func impl_open(name string) (io.ReadCloser, error) {
 	return os.Open(embedPath(name))
 }
-func create(name string) (io.ReadWriteCloser, error) {
+func impl_create(name string) (io.ReadWriteCloser, error) {
 	return os.Create(embedPath(name))
 }
-func readFile(name string) ([]byte, error) {
+func impl_readFile(name string) ([]byte, error) {
 	key := embedPath(name)
 	memMu.RLock()
 	if b, ok := memFiles[key]; ok {
@@ -43,14 +43,14 @@ func readFile(name string) ([]byte, error) {
 	return embed_include.ReadFile(key)
 }
 
-func writeFile(name string, data []byte) error {
+func impl_writeFile(name string, data []byte) error {
 	key := embedPath(name)
 	memMu.Lock()
 	memFiles[key] = append([]byte(nil), data...)
 	memMu.Unlock()
 	return nil
 }
-func readDir(name string) ([]fs.DirEntry, error) {
+func impl_readDir(name string) ([]fs.DirEntry, error) {
 	return embed_include.ReadDir(embedPath(name))
 }
 

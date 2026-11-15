@@ -5,17 +5,7 @@ Pointers and function cannot be sent over the wire. Generics evaluate into their
 ## Usage
 
 ```sh
-$ gen -l go -s ./env.abi -o ../out/
-```
-
-```
-$ gen -h
-  -l target/<lang>/*.tmpl
-        target language directory target/<lang>/*.tmpl (default "go")
-  -o string
-        output directory (default "out")
-  -s .abi
-        input .abi source file (default "env.abi")
+gen -l go -s ./env.abi -o ./out/
 ```
 
 ## Behaviour
@@ -51,6 +41,8 @@ DECL = Name, ['<' Name, {',', Name}, '>'], TYPE;
 MODULE = 'module', Name, '{', { DECL }, '}';
 SOURCE = { MODULE }, Eof;
 ```
+
+And here's an example. You can define multiple modules and they will be emitted as multiple files:
 
 ```rs
 module env {

@@ -2,17 +2,9 @@ package platform
 
 import (
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/Masterminds/semver/v3"
-)
-
-type ENGINE_MODE uint8
-
-const (
-	MODE_RELEASE ENGINE_MODE = iota
-	MODE_DEBUG
 )
 
 type ENGINE_OS uint8
@@ -37,10 +29,9 @@ var (
 	BUILD_TAG         string = "" // Do not read from these!
 	BUILD_BUILT       string = "" // Do not read from these!
 	BUILD_COMMIT      string = "" // Do not read from these!
-	BUILD_MODE        string = "" // Do not read from these!
+	BUILD_RELEASE     string = "" // Do not read from these!
 	BUILD_TARGET_OS   string = "" // Do not read from these!
 	BUILD_TARGET_ARCH string = "" // Do not read from these!
-	BUILD_API_VERSION string = "" // Do not read from these!
 )
 
 var (
@@ -49,11 +40,10 @@ var (
 	internal_tag            *semver.Version
 	internal_built          time.Time
 	internal_commit         string
-	internal_mode           ENGINE_MODE
+	internal_release        bool
 	internal_target         string
 	internal_target_os      ENGINE_OS
 	internal_target_arch    ENGINE_ARCH
-	internal_api_version    int
 )
 
 func InitMeta() error {
@@ -72,17 +62,14 @@ func InitMeta() error {
 	if len(BUILD_BUILT) == 0 {
 		return fmt.Errorf("built timestamp was nil")
 	}
-	if len(BUILD_MODE) == 0 {
-		return fmt.Errorf("engine mode was nil")
+	if len(BUILD_RELEASE) == 0 {
+		return fmt.Errorf("engine release was nil")
 	}
 	if len(BUILD_TARGET_OS) == 0 {
 		return fmt.Errorf("target os was nil")
 	}
 	if len(BUILD_TARGET_ARCH) == 0 {
 		return fmt.Errorf("target arch was nil")
-	}
-	if len(BUILD_API_VERSION) == 0 {
-		return fmt.Errorf("api version was nil")
 	}
 
 	var err error
@@ -96,13 +83,13 @@ func InitMeta() error {
 	if err != nil {
 		return fmt.Errorf("failed to parse build time: %w", err)
 	}
-	switch BUILD_MODE {
-	case "RELEASE":
-		internal_mode = MODE_RELEASE
-	case "DEBUG":
-		internal_mode = MODE_DEBUG
+	switch BUILD_RELEASE {
+	case "true":
+		internal_release = true
+	case "false":
+		internal_release = false
 	default:
-		return fmt.Errorf("invalid engine mode: %s", BUILD_MODE)
+		return fmt.Errorf("invalid engine mode: %s", BUILD_RELEASE)
 	}
 	internal_target = fmt.Sprintf("%s/%s", BUILD_TARGET_OS, BUILD_TARGET_ARCH)
 	switch BUILD_TARGET_OS {
@@ -128,20 +115,13 @@ func InitMeta() error {
 		return fmt.Errorf("invalid arch build target: %s", BUILD_TARGET_ARCH)
 	}
 
-	api_ver, err := strconv.Atoi(BUILD_API_VERSION)
-	if err != nil {
-		return fmt.Errorf("failed to parse api version: %w", err)
-	}
-	internal_api_version = api_ver
-
 	BUILD_NAME = ""
 	BUILD_TAG = ""
 	BUILD_COMMIT = ""
 	BUILD_BUILT = ""
-	BUILD_MODE = ""
+	BUILD_RELEASE = ""
 	BUILD_TARGET_OS = ""
 	BUILD_TARGET_ARCH = ""
-	BUILD_API_VERSION = ""
 
 	internal_is_initialized = true
 	return nil
@@ -160,12 +140,11 @@ func GetFormattedApplicationLabel() string {
 	if IsInDebugMode() {
 		suffix = "Debug"
 	}
-	return fmt.Sprintf("%s & v%s -o- %s (%s) v%d %s %s",
+	return fmt.Sprintf("%s v%s %s (%s) %s %s",
 		internal_name,
 		internal_tag,
 		internal_commit,
 		internal_built.Format(time.DateTime),
-		internal_api_version,
 		internal_target,
 		suffix,
 	)
@@ -178,12 +157,7 @@ func GetTarget() string {
 
 func IsInDebugMode() bool {
 	verifyIsInit()
-	return internal_mode == MODE_DEBUG
-}
-
-func GetApiVersion() int {
-	verifyIsInit()
-	return internal_api_version
+	return !internal_release
 }
 
 func HasFileSystem() bool {

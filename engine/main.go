@@ -3,8 +3,8 @@ package engine
 import (
 	"fmt"
 
-	"github.com/StoneTrench/CovarexEngine/src/engine/core/log"
-	"github.com/StoneTrench/CovarexEngine/src/engine/platform"
+	"github.com/StoneTrench/CovarexEngine/engine/core/log"
+	"github.com/StoneTrench/CovarexEngine/engine/platform"
 )
 
 func Init(logDir string) error {
