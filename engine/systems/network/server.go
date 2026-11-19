@@ -3,12 +3,12 @@ package network
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"sync"
 	"time"
 
 	"github.com/StoneTrench/CovarexEngine/engine/core/events"
-	"github.com/StoneTrench/CovarexEngine/engine/core/log"
 	"github.com/StoneTrench/CovarexEngine/engine/systems/network/protocol"
 )
 
@@ -64,7 +64,7 @@ func (s *Server) Close() {
 
 func (s *Server) go_begin_listen() {
 	s.mu.RLock()
-	log.Infof("Server listening on address: %s", s.listen.LocalAddr().String())
+	slog.Info(fmt.Sprintf("Server listening on address: %s", s.listen.LocalAddr().String()))
 	lstnr := s.listen
 	s.mu.RUnlock()
 	defer s.wait_group.Done()
@@ -82,23 +82,23 @@ func (s *Server) go_begin_listen() {
 			err_fatal := listen_res.ErrFatal
 
 			if err_closed != nil {
-				log.Infof("Server closed: %s", err_closed.Error())
+				slog.Info(fmt.Sprintf("Server closed: %s", err_closed.Error()))
 				s.ctx_cancel()
 				return
 			}
 			if err_fatal != nil {
-				log.Errorf("Fatal error occured in server while listening: %w", err_fatal)
+				slog.Error(fmt.Errorf("fatal error occured in server while listening: %w", err_fatal).Error())
 				return
 			}
 
-			log.Infof("Server received payload from %d: %v", peer_id, payload)
+			slog.Info(fmt.Sprintf("Server received payload from %d: %v", peer_id, payload))
 
 			s.mu.Lock()
 			var peer *PeerClient
 			if peer_id == protocol.PeerId_ConnectionRequest {
 				peer_id, err = s.get_next_peer_id()
 				if err != nil {
-					log.Errorf("Error occured while server was connecting to new client: %w", err)
+					slog.Error(fmt.Errorf("error occured while server was connecting to new client: %w", err).Error())
 					goto mu_continue
 				}
 				peer = &PeerClient{
@@ -115,28 +115,28 @@ func (s *Server) go_begin_listen() {
 				s.peer_conn[peer_id] = peer
 				err = peer.Transmitter.SendPayload(protocol.NewPayloadControl_SetPeerId(peer_id), false)
 				if err != nil {
-					log.Errorf("Error occured while server was connecting to new client: %w", err)
+					slog.Error(fmt.Errorf("error occured while server was connecting to new client: %w", err).Error())
 				}
 				err = s.PacketSource.EmitImmediate(NetworkEvent{
 					Id:     EventId_PeerConnected,
 					Sender: peer_id,
 				})
 				if err != nil {
-					log.Errorf("Error occured while server was connecting to new client: %w", err)
+					slog.Error(fmt.Errorf("error occured while server was connecting to new client: %w", err).Error())
 				}
 
 			} else {
 				var exists bool
 				peer, exists = s.peer_conn[peer_id]
 				if !exists {
-					log.Errorf("Error occured in server while looking for peer: peer with id %d not exist", peer_id)
+					slog.Error(fmt.Errorf("error occured in server while looking for peer: peer with id %d not exist", peer_id).Error())
 					goto mu_continue
 				}
 			}
 
 			err = peer.Transmitter.HandlePacket(payload, address, peer_id)
 			if err != nil {
-				log.Errorf("Error occured while server was handling packet: %w", err)
+				slog.Error(fmt.Errorf("error occured while server was handling packet: %w", err).Error())
 			}
 
 			HandleIncomingData(peer.Transmitter, s.PacketSource)

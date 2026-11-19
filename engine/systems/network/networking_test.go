@@ -2,24 +2,27 @@ package network_test
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/StoneTrench/CovarexEngine/engine/core/log"
+	"github.com/StoneTrench/CovarexEngine/engine/platform"
 	"github.com/StoneTrench/CovarexEngine/engine/systems/network"
 )
 
 func Test(t *testing.T) {
-	log.Init("", true)
+	log.Init(new(platform.VFS).Init(nil, true), "", true)
 
-	log.Info("Server started")
+	slog.Info("Server started")
 	server, err := network.StartServer(context.Background(), 25565)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 	eh1 := server.PacketSource.Subscribe(func(e network.NetworkEvent) error {
-		log.Infof("Server event: %v", e)
+		slog.Info(fmt.Sprintf("Server event: %v", e))
 		return nil
 	})
 	defer server.PacketSource.Unsubscribe(eh1)
@@ -27,20 +30,20 @@ func Test(t *testing.T) {
 
 	var client *network.Client
 	for i := range 10 {
-		log.Infof("Client started: %d", i)
+		slog.Info(fmt.Sprintf("Client started: %d", i))
 		client, err = network.StartClient(context.Background(), "127.0.0.1:25565")
 		if err != nil {
 			t.Error(err)
 			return
 		}
 		eh2 := client.PacketSource.Subscribe(func(e network.NetworkEvent) error {
-			log.Infof("Client event: %v", e)
+			slog.Info(fmt.Sprintf("Client event: %v", e))
 			return nil
 		})
 		defer client.PacketSource.Unsubscribe(eh2)
 		defer client.Close()
 	}
 
-	log.Info("Started sleeping for 5s")
+	slog.Info("Started sleeping for 5s")
 	time.Sleep(time.Second * 10)
 }

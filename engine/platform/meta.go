@@ -37,7 +37,7 @@ var (
 var (
 	internal_is_initialized bool = false
 	internal_name           string
-	internal_tag            *semver.Version
+	internal_tag            semver.Version
 	internal_built          time.Time
 	internal_commit         string
 	internal_release        bool
@@ -74,10 +74,11 @@ func InitMeta() error {
 
 	var err error
 	internal_name = BUILD_NAME
-	internal_tag, err = semver.NewVersion(BUILD_TAG)
+	build_tag, err := semver.NewVersion(BUILD_TAG)
 	if err != nil {
 		return fmt.Errorf("failed to parse version (build tag): %w", err)
 	}
+	internal_tag = *build_tag
 	internal_commit = BUILD_COMMIT
 	internal_built, err = time.Parse(time.DateTime, BUILD_BUILT)
 	if err != nil {
@@ -126,13 +127,11 @@ func InitMeta() error {
 	internal_is_initialized = true
 	return nil
 }
-
 func verifyIsInit() {
 	if !internal_is_initialized {
 		panic("metadata not initialized")
 	}
 }
-
 func GetFormattedApplicationLabel() string {
 	verifyIsInit()
 
@@ -149,17 +148,16 @@ func GetFormattedApplicationLabel() string {
 		suffix,
 	)
 }
-
 func GetTarget() string {
 	verifyIsInit()
 	return internal_target
 }
-
 func IsInDebugMode() bool {
 	verifyIsInit()
 	return !internal_release
 }
-
-func HasFileSystem() bool {
-	return internal_target_os != OS_JS && internal_target_os != OS_WASIP1
+func GetVersion() *semver.Version {
+	verifyIsInit()
+	clone := internal_tag
+	return &clone
 }

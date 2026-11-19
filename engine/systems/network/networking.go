@@ -1,9 +1,10 @@
 package network
 
 import (
+	"fmt"
+	"log/slog"
 	"time"
 
-	"github.com/StoneTrench/CovarexEngine/engine/core/log"
 	"github.com/StoneTrench/CovarexEngine/engine/systems/network/protocol"
 )
 
@@ -35,7 +36,7 @@ func HandleIncomingData(t *protocol.ReliableTransmitter, e *EventSource[NetworkE
 					Data:   d,
 				})
 				if err != nil {
-					log.Errorf("Error occured while emitting network event: %w", err)
+					slog.Error(fmt.Errorf("Error occured while emitting network event: %w", err).Error())
 				}
 			}
 		default:

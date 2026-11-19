@@ -27,14 +27,15 @@ type Module struct {
 	Types    []Name
 }
 type FuncDecl struct {
-	Module       *Module
-	WasmName     string
-	Name         string
-	WasmParams   []Name
-	OutputStruct types.TypeRef
-	Input        []Name
-	Output       []Name
-	Block        []Instr
+	Module        *Module
+	WasmName      string
+	Name          string
+	DeclaredNames []Name
+	WasmParams    []Name
+	OutputStruct  types.TypeRef
+	Input         []Name
+	Output        []Name
+	Block         []Instr
 }
 type Instr struct {
 	Func  *FuncDecl
@@ -232,9 +233,10 @@ var op_buffer_io = map[types.TypePrimitive][2]string{
 	types.TypeP_f64: {"WriteBufF64", "ReadBufF64"},
 }
 var op_string_conv = [2]string{"StringToSlice", "SliceToString"}
-var op_pointer_conv = [2]string{"PointerToValue", "ValueToPointer"} // deref and ref
+var op_pointer_deref_conv = [2]string{"PointerToValue", "ValueToPointer"} // deref and ref
+var op_pointer_usize_conv = [2]string{"PointerToUsize", "UsizeToPointer"}
 var op_bool_conv = [2]string{"BoolToU8", "U8ToBool"}
-var op_usize_conv = [2]string{"UsizeToU32", "U32ToUsize"}
+var op_usize_u32_conv = [2]string{"UsizeToU32", "U32ToUsize"}
 
 var op_enum_conv = map[types.TypePrimitive][2]string{
 	types.TypeP_u8:  {"EnumToU8", "U8ToEnum"},
@@ -252,9 +254,12 @@ var op_array_make = "MakeArray" // New array
 var op_slice_make = "MakeSlice" // New slice
 var op_slice_free = "FreeSlice" // Destroy slice.
 
+var op_move_output = "MoveOutput" // Create an output variable from a block
+var op_move = "MoveInput"         // Assign to the output variable
+
 var op_plex_index = [2]string{"ReadStruct", "WriteStruct"} // read field from struct
 var op_array_index = [2]string{"ReadArray", "WriteArray"}  // read element from fixed array
 var op_slice_index = [2]string{"ReadSlice", "WriteSlice"}  // read element from slice
 var op_slice_length = "SliceLength"                        // Get length of slice
 
-var op_nop_comment = "Nop"
+var op_nop_comment = "Nop" // Its a comment

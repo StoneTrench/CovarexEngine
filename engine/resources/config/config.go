@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 
 	"github.com/StoneTrench/CovarexEngine/engine/platform"
-	"github.com/StoneTrench/CovarexEngine/engine/platform/filesystem"
 )
 
 type Config struct {
@@ -23,11 +22,8 @@ func (c *Config) Init(path string) *Config {
 	return c
 }
 
-func (c *Config) OpenOrCreate() error {
-	if !platform.HasFileSystem() {
-		return nil
-	}
-	file, err := filesystem.OpenOrCreate(c.FilePath)
+func (c *Config) Open(fs platform.VFS) error {
+	file, err := fs.Open(c.FilePath)
 	if err != nil {
 		return err
 	}
@@ -53,15 +49,15 @@ func (c *Config) OpenOrCreate() error {
 
 	return nil
 }
-func (c *Config) FlushConfig() error {
-	if !platform.HasFileSystem() {
+func (c *Config) FlushConfig(fs platform.VFS) error {
+	if !fs.HasWriteAccess() {
 		return nil
 	}
 	data, err := json.MarshalIndent(*c, "", "  ")
 	if err != nil {
 		return err
 	}
-	return filesystem.WriteFile(c.FilePath, data)
+	return fs.WriteFile(c.FilePath, data, platform.OpenFile_DEF_PERM)
 }
 
 func (c *Config) GetString(key string) (string, bool) {

@@ -92,7 +92,7 @@ func (b *fnBuilder) NopComment(text string) *Instr {
 func (b *fnBuilder) Serialize(m ir_writer_mode, names []Name) []error {
 	err_list := []error{}
 	for _, v := range names {
-		if err := bWrite_name(b, m, v); err != nil {
+		if err := bufWrite_name(b, m, v); err != nil {
 			err_list = append(err_list, fmt.Errorf("failed to serialize (%s): %w", v.Name, err))
 			continue
 		}

@@ -60,6 +60,7 @@ func BuildAgnosticModule(c *TColl, name string, fields []TypeField) (*Module, er
 				err_list = append(err_list, err)
 				continue
 			}
+			// postprocess_func(fun)
 			mod.Guest = append(mod.Guest, *fun)
 
 			fun, err = decl_func_host(c, mod, field.Name, &type_fn)
@@ -67,6 +68,7 @@ func BuildAgnosticModule(c *TColl, name string, fields []TypeField) (*Module, er
 				err_list = append(err_list, err)
 				continue
 			}
+			// postprocess_func(fun)
 			mod.Host = append(mod.Host, *fun)
 		} else {
 			mod.Types = append(mod.Types, Name{Name: NormalizedIdentifier(field.Name), Type: field.Type})
@@ -307,6 +309,40 @@ func decl_func_host(c *TColl, mod *Module, name string, fn *TypeFunc) (*FuncDecl
 
 	return result, nil
 }
+func postprocess_func(fn *FuncDecl) {
+	excluded := make(map[string]TypeRef)
+	names := make(map[string]TypeRef)
+
+	var coll_names func(instr Instr)
+
+	coll_names = func(inst Instr) {
+		for _, n := range inst.Input {
+			if _, e := excluded[n.Name]; !e {
+				names[n.Name] = n.Type
+			}
+		}
+		for _, n := range inst.Output {
+			if _, e := excluded[n.Name]; !e {
+				names[n.Name] = n.Type
+			}
+		}
+		for _, n := range inst.Block {
+			coll_names(n)
+		}
+	}
+
+	for _, n := range fn.Input {
+		excluded[n.Name] = n.Type
+	}
+
+	for _, n := range fn.Block {
+		coll_names(n)
+	}
+
+	for n, t := range names {
+		fn.DeclaredNames = append(fn.DeclaredNames, Name{Name: n, Type: t})
+	}
+}
 
 type ir_writer_mode uint8
 
@@ -315,7 +351,7 @@ const (
 	READ_FROM_BUFFER
 )
 
-func bWrite_primitive_write(b *fnBuilder, input Name, e TypePrimitive) error {
+func bufWrite_primitive_write(b *fnBuilder, input Name, e TypePrimitive) error {
 	m := WRITE_TO_BUFFER
 
 	switch e {
@@ -328,17 +364,17 @@ func bWrite_primitive_write(b *fnBuilder, input Name, e TypePrimitive) error {
 		e = TypeP_u8
 		output := b.NextT(e)
 		b.Write_1x1(op_bool_conv[m], input, output)
-		return bWrite_primitive_write(b, output, e)
+		return bufWrite_primitive_write(b, output, e)
 	case TypeP_usize:
 		e = TypeP_u32
 		output := b.NextT(e)
-		b.Write_1x1(op_usize_conv[m], input, output)
-		return bWrite_primitive_write(b, output, e)
+		b.Write_1x1(op_usize_u32_conv[m], input, output)
+		return bufWrite_primitive_write(b, output, e)
 
 	case TypeP_string:
 		output := b.NextT(TypeSlice{Type: b.Ref(TypeP_u8)})
 		b.Write_1x1(op_string_conv[m], input, output)
-		return bWrite_name(b, m, output)
+		return bufWrite_name(b, m, output)
 	}
 
 	op, ok := op_buffer_io[e]
@@ -348,7 +384,7 @@ func bWrite_primitive_write(b *fnBuilder, input Name, e TypePrimitive) error {
 	b.WriteBuf(m, op[m], input)
 	return nil
 }
-func bWrite_primitive_read(b *fnBuilder, output Name, e TypePrimitive) error {
+func bufWrite_primitive_read(b *fnBuilder, output Name, e TypePrimitive) error {
 	m := READ_FROM_BUFFER
 
 	switch e {
@@ -360,7 +396,7 @@ func bWrite_primitive_read(b *fnBuilder, output Name, e TypePrimitive) error {
 	case TypeP_bool:
 		e = TypeP_u8
 		input := b.NextT(e)
-		err := bWrite_primitive_read(b, input, e)
+		err := bufWrite_primitive_read(b, input, e)
 		if err != nil {
 			return err
 		}
@@ -369,16 +405,16 @@ func bWrite_primitive_read(b *fnBuilder, output Name, e TypePrimitive) error {
 	case TypeP_usize:
 		e = TypeP_u32
 		input := b.NextT(e)
-		err := bWrite_primitive_read(b, input, e)
+		err := bufWrite_primitive_read(b, input, e)
 		if err != nil {
 			return err
 		}
-		b.Write_1x1(op_usize_conv[m], input, output)
+		b.Write_1x1(op_usize_u32_conv[m], input, output)
 		return nil
 
 	case TypeP_string:
 		input := b.NextT(TypeSlice{Type: b.Ref(TypeP_u8)})
-		err := bWrite_name(b, m, input)
+		err := bufWrite_name(b, m, input)
 		if err != nil {
 			return err
 		}
@@ -393,16 +429,16 @@ func bWrite_primitive_read(b *fnBuilder, output Name, e TypePrimitive) error {
 	b.WriteBuf(m, op[m], output)
 	return nil
 }
-func bWrite_primitive(b *fnBuilder, m ir_writer_mode, name Name, e TypePrimitive) error {
+func bufWrite_primitive(b *fnBuilder, m ir_writer_mode, name Name, e TypePrimitive) error {
 	switch m {
 	case WRITE_TO_BUFFER:
-		return bWrite_primitive_write(b, name, e)
+		return bufWrite_primitive_write(b, name, e)
 	case READ_FROM_BUFFER:
-		return bWrite_primitive_read(b, name, e)
+		return bufWrite_primitive_read(b, name, e)
 	}
 	return nil
 }
-func bWrite_struct(b *fnBuilder, m ir_writer_mode, name Name, e TypeStruct) error {
+func bufWrite_struct(b *fnBuilder, m ir_writer_mode, name Name, e TypeStruct) error {
 	if m == READ_FROM_BUFFER {
 		b.Write_0x1(op_plex_make, name)
 	}
@@ -411,7 +447,7 @@ func bWrite_struct(b *fnBuilder, m ir_writer_mode, name Name, e TypeStruct) erro
 		if m == WRITE_TO_BUFFER {
 			b.Write_1x1(op_plex_index[m], name, output).Text = f.Name
 		}
-		err := bWrite_name(b, m, output)
+		err := bufWrite_name(b, m, output)
 		if err != nil {
 			return fmt.Errorf("failure in struct field (%s:%s): %w", f.Name, Keyof(f.Type), err)
 		}
@@ -421,7 +457,7 @@ func bWrite_struct(b *fnBuilder, m ir_writer_mode, name Name, e TypeStruct) erro
 	}
 	return nil
 }
-func bWrite_enum(b *fnBuilder, m ir_writer_mode, name Name, e TypeEnum) error {
+func bufWrite_enum(b *fnBuilder, m ir_writer_mode, name Name, e TypeEnum) error {
 	enum_type, err := b.Body(e.Type)
 	if err != nil {
 		return fmt.Errorf("failed to find body of enum: %w", err)
@@ -439,9 +475,9 @@ func bWrite_enum(b *fnBuilder, m ir_writer_mode, name Name, e TypeEnum) error {
 	switch m {
 	case WRITE_TO_BUFFER:
 		b.Write_1x1(op[m], name, output)
-		return bWrite_name(b, m, output)
+		return bufWrite_name(b, m, output)
 	case READ_FROM_BUFFER:
-		err := bWrite_name(b, m, output)
+		err := bufWrite_name(b, m, output)
 		if err != nil {
 			return err
 		}
@@ -450,7 +486,7 @@ func bWrite_enum(b *fnBuilder, m ir_writer_mode, name Name, e TypeEnum) error {
 
 	return nil
 }
-func bWrite_array(b *fnBuilder, m ir_writer_mode, name Name, e TypeArray) error {
+func bufWrite_array(b *fnBuilder, m ir_writer_mode, name Name, e TypeArray) error {
 	index := b.NextT(TypeP_usize)
 	element := b.Next(e.Type)
 
@@ -466,12 +502,12 @@ func bWrite_array(b *fnBuilder, m ir_writer_mode, name Name, e TypeArray) error 
 	switch m {
 	case WRITE_TO_BUFFER:
 		b.Write_2x1(op_array_index[m], name, index, element)
-		err := bWrite_name(b, m, element)
+		err := bufWrite_name(b, m, element)
 		if err != nil {
 			return err
 		}
 	case READ_FROM_BUFFER:
-		err := bWrite_name(b, m, element)
+		err := bufWrite_name(b, m, element)
 		if err != nil {
 			return err
 		}
@@ -485,7 +521,7 @@ func bWrite_array(b *fnBuilder, m ir_writer_mode, name Name, e TypeArray) error 
 	b.Write(loop)
 	return nil
 }
-func bWrite_slice(b *fnBuilder, m ir_writer_mode, name Name, e TypeSlice) error {
+func bufWrite_slice(b *fnBuilder, m ir_writer_mode, name Name, e TypeSlice) error {
 	index := b.NextT(TypeP_usize)
 	length := b.NextT(TypeP_usize)
 	element := b.Next(e.Type)
@@ -493,12 +529,12 @@ func bWrite_slice(b *fnBuilder, m ir_writer_mode, name Name, e TypeSlice) error 
 	switch m {
 	case WRITE_TO_BUFFER:
 		b.Write_1x1(op_slice_length, name, length)
-		err := bWrite_name(b, m, length)
+		err := bufWrite_name(b, m, length)
 		if err != nil {
 			return err
 		}
 	case READ_FROM_BUFFER:
-		err := bWrite_name(b, m, length)
+		err := bufWrite_name(b, m, length)
 		if err != nil {
 			return err
 		}
@@ -512,12 +548,12 @@ func bWrite_slice(b *fnBuilder, m ir_writer_mode, name Name, e TypeSlice) error 
 	switch m {
 	case WRITE_TO_BUFFER:
 		b.Write_2x1(op_slice_index[m], name, index, element)
-		err := bWrite_name(b, m, element)
+		err := bufWrite_name(b, m, element)
 		if err != nil {
 			return err
 		}
 	case READ_FROM_BUFFER:
-		err := bWrite_name(b, m, element)
+		err := bufWrite_name(b, m, element)
 		if err != nil {
 			return err
 		}
@@ -531,7 +567,53 @@ func bWrite_slice(b *fnBuilder, m ir_writer_mode, name Name, e TypeSlice) error 
 	b.Write(loop)
 	return nil
 }
-func bWrite_name(b *fnBuilder, mode ir_writer_mode, input Name) error {
+func bufWrite_pointer(b *fnBuilder, m ir_writer_mode, name Name, e TypePointer) error {
+	// return fmt.Errorf("sending pointers across the wire is unsafe")
+
+	value := b.Next(e.Type)
+	value_usize := b.NextT(TypeP_usize)
+	value_u32 := b.NextT(TypeP_u32)
+
+	switch m {
+	case WRITE_TO_BUFFER:
+		b.Write_1x1(op_pointer_usize_conv[m], name, value_usize)
+		b.Write_1x1(op_usize_u32_conv[m], value_usize, value_u32)
+		if err := bufWrite_name(b, m, value_u32); err != nil {
+			return err
+		}
+	case READ_FROM_BUFFER:
+		if err := bufWrite_name(b, m, value_u32); err != nil {
+			return err
+		}
+	}
+
+	if m == READ_FROM_BUFFER {
+		b.Write_0x1(op_declare_unknown, name)
+	}
+
+	old_block := b.Block
+	b.Block = []Instr{}
+
+	if m == WRITE_TO_BUFFER {
+		b.Write_1x1(op_pointer_deref_conv[m], name, value)
+	}
+	if err := bufWrite_name(b, m, value); err != nil {
+		return err
+	}
+	if m == READ_FROM_BUFFER {
+		pingo := b.Next(name.Type)
+		b.Write_1x1(op_pointer_deref_conv[m], value, pingo)
+		b.Write_2x0(op_move, name, pingo)
+	}
+
+	new_block := b.Block
+	b.Block = old_block
+
+	b.Write(Instr{Kind: op_if_not_zero, Input: []Name{value_u32}, Block: new_block})
+
+	return nil
+}
+func bufWrite_name(b *fnBuilder, mode ir_writer_mode, input Name) error {
 	body, err := b.Body(input.Type)
 	if err != nil {
 		return err
@@ -550,17 +632,17 @@ func bWrite_name(b *fnBuilder, mode ir_writer_mode, input Name) error {
 
 	switch e := body.(type) {
 	case TypePrimitive:
-		return bWrite_primitive(b, mode, input, e)
+		return bufWrite_primitive(b, mode, input, e)
 	case TypeStruct:
-		return bWrite_struct(b, mode, input, e)
+		return bufWrite_struct(b, mode, input, e)
 	case TypeEnum:
-		return bWrite_enum(b, mode, input, e)
+		return bufWrite_enum(b, mode, input, e)
 	case TypeArray:
-		return bWrite_array(b, mode, input, e)
+		return bufWrite_array(b, mode, input, e)
 	case TypeSlice:
-		return bWrite_slice(b, mode, input, e)
+		return bufWrite_slice(b, mode, input, e)
 	case TypePointer:
-		return fmt.Errorf("sending pointers across the wire is unsafe")
+		return bufWrite_pointer(b, mode, input, e)
 	case TypeIdent:
 		return fmt.Errorf("this should be unreachable, if it was reached, identifier clensing didnt work")
 	case TypeAnonymous:

@@ -2,13 +2,14 @@ package network
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 	"net"
 	"net/netip"
 	"sync"
 	"time"
 
 	"github.com/StoneTrench/CovarexEngine/engine/core/events"
-	"github.com/StoneTrench/CovarexEngine/engine/core/log"
 	"github.com/StoneTrench/CovarexEngine/engine/systems/network/protocol"
 )
 
@@ -60,7 +61,7 @@ func StartClient(ctx context.Context, address string) (*Client, error) {
 
 	err = s.Transmitter.SendPayload(protocol.NewPayloadOriginal(nil), true)
 	if err != nil {
-		log.Errorf("Error occured in client: %w", err)
+		slog.Error(fmt.Errorf("Error occured in client: %w", err).Error())
 	}
 
 	return s, nil
@@ -68,7 +69,7 @@ func StartClient(ctx context.Context, address string) (*Client, error) {
 
 func (s *Client) go_begin_listen() {
 	s.mu.RLock()
-	log.Infof("Client listening on address: %s", s.listen.LocalAddr().String())
+	slog.Info(fmt.Sprintf("Client listening on address: %s", s.listen.LocalAddr().String()))
 	lstnr := s.listen
 	s.mu.RUnlock()
 	defer s.wait_group.Done()
@@ -85,16 +86,16 @@ func (s *Client) go_begin_listen() {
 			err_fatal := listen_res.ErrFatal
 
 			if err_closed != nil {
-				log.Infof("Client closed: %s", err_closed.Error())
+				slog.Info(fmt.Sprintf("Client closed: %s", err_closed.Error()))
 				s.ctx_cancel()
 				return
 			}
 			if err_fatal != nil {
-				log.Errorf("Fatal error occured in client while listening: %w", err_fatal)
+				slog.Error(fmt.Errorf("Fatal error occured in client while listening: %w", err_fatal).Error())
 				return
 			}
 
-			log.Infof("Client received payload from %d: %v", peer_id, payload)
+			slog.Info(fmt.Sprintf("Client received payload from %d: %v", peer_id, payload))
 
 			if peer_id == protocol.PeerId_Server {
 				s.mu.RLock()
@@ -103,7 +104,7 @@ func (s *Client) go_begin_listen() {
 				s.mu.RUnlock()
 				err := trans.HandlePacket(payload, address, peer_id)
 				if err != nil {
-					log.Errorf("Error occured while client was handling packet: %w", err)
+					slog.Error(fmt.Errorf("Error occured while client was handling packet: %w", err).Error())
 				}
 
 				HandleIncomingData(trans, event_bus)

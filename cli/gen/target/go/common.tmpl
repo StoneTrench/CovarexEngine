@@ -228,6 +228,21 @@ type {{$name.Name}} {{template "emit_Type" $name.Type}}
 		for range {{.Integer}} {{template "emit_Block" .Block}}
 	{{- else if eq .Kind "LoopUntil" -}}
 		for {{(index .Input 0).Name}} < {{(index .Input 1).Name}} {{template "emit_Block" .Block}}
+	{{- else if eq .Kind "IfNotZeroBlock" -}}
+		if {{(index .Input 0).Name}} != 0 {{template "emit_Block" .Block}}
+		
+	{{- else if eq .Kind "MoveOutput" -}}
+		var {{(index .Input 0).Name}} {{template "emit_Type" (index .Input 0).Type}}
+	{{- else if eq .Kind "MoveInput" -}}
+		{{(index .Input 0).Name}} = {{(index .Input 1).Name}}
+	{{- else if eq .Kind "PointerToValue" -}}
+		{{(index .Output 0).Name}} := *{{(index .Input 0).Name}}
+	{{- else if eq .Kind "ValueToPointer" -}}
+		{{(index .Output 0).Name}} := &{{(index .Input 0).Name}}
+	{{- else if eq .Kind "PointerToUsize" -}}
+		{{(index .Output 0).Name}} := uint32(uintptr(unsafe.Pointer({{(index .Input 0).Name}})))
+	{{- else if eq .Kind "UsizeToPointer" -}}
+		{{(index .Output 0).Name}} := ({{template "emit_Type" (index .Output 0).Name}})(unsafe.Pointer(uintptr(uint32({{(index .Input 0).Name}}))))
 	
 	{{- else if eq .Kind "CallWireIO" -}}
 		_{{.Func.Module.Name}}_{{.Func.Name}}({{(index .Input 0).Name}}, {{(index .Input 1).Name}}, uint32(uintptr(unsafe.Pointer(&{{(index .Input 2).Name}}))), uint32(uintptr(unsafe.Pointer(&{{(index .Input 3).Name}}))))

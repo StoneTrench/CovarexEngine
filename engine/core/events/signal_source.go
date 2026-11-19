@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-type SubId uint64
+type SubId uint16
 type Subscriber[T any] func(e T) error
 
 type listener_t[T any] struct {
@@ -39,25 +39,16 @@ func (e *SignalSource[T]) handle_event(event T) error {
 }
 
 func (e *SignalSource[T]) EmitImmediate(event T) error {
-	if e == nil {
-		panic("Event source was a null (nil) pointer!")
-	}
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.handle_event(event)
 }
 
 func (e *SignalSource[T]) EmitDeferred(event T) {
-	if e == nil {
-		panic("Event source was a null (nil) pointer!")
-	}
 	go e.EmitImmediate(event)
 }
 
 func (e *SignalSource[T]) Subscribe(fn Subscriber[T]) SubId {
-	if e == nil {
-		panic("Event source was a null (nil) pointer!")
-	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	id := e.next_id
@@ -70,9 +61,6 @@ func (e *SignalSource[T]) Subscribe(fn Subscriber[T]) SubId {
 }
 
 func (e *SignalSource[T]) Unsubscribe(id SubId) {
-	if e == nil {
-		panic("Event source was a null (nil) pointer!")
-	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	last := len(e.handlers) - 1

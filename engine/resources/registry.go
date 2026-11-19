@@ -4,12 +4,24 @@ import (
 	"fmt"
 	"iter"
 	"log/slog"
+	"slices"
 	"sync"
 
 	"golang.org/x/exp/constraints"
 )
 
 /*
+
+1. Register resources
+1. Freeze resources, Increment version counter (Permanent until reset)
+1. Can query by identifier
+	1. Apply id map, Validate ids
+	1. Can query by id
+	1. Invalidate ids, Increment version counter
+	1. Repeat
+1. Reset
+1. Register resources
+1. Repeat
 
 There's two phases of the registry's lifespan:
 + Registering resources
@@ -33,6 +45,53 @@ A:
 
 */
 
+type RegistryErr[T any, I constraints.Integer] struct {
+	RegName    string
+	RegFrozen  bool
+	RegValid   bool
+	RegVersion uint32
+	Ops        string
+	Err        error
+}
+
+func (e *RegistryErr[T, I]) Error() string {
+	return fmt.Sprintf("registry (name:%q,frozen:%v,valid:%v,version:%d): operation %s: %s",
+		e.RegName, e.RegFrozen, e.RegValid, e.RegVersion,
+		e.Ops, e.Err.Error(),
+	)
+}
+
+func new_error[T any, I constraints.Integer](reg *Registry[T, I], op string, err error) error {
+	return &RegistryErr[T, I]{
+		RegName:    reg.name,
+		RegFrozen:  reg.is_frozen,
+		RegValid:   reg.is_id_valid,
+		RegVersion: reg.version,
+		Ops:        op,
+		Err:        err,
+	}
+}
+func new_errorf[T any, I constraints.Integer](reg *Registry[T, I], op string, format string, args ...any) error {
+	return new_error(reg, op, fmt.Errorf(format, args...))
+}
+
+const (
+	REG_ERR_FROZEN     = "is already frozen, registration phase over"
+	REG_ERR_NOT_FROZEN = "is not yet frozen, registration phase still underway"
+
+	REG_ERR_INVALIDATED     = "entries have already been invalidated, waiting for new id map"
+	REG_ERR_NOT_INVALIDATED = "entries have not been invalidated, cannot apply new id map"
+
+	REG_ERR_EXIST_IDENT     = "entry with identifier %q already exists"
+	REG_ERR_NOT_EXIST_IDENT = "entry with identifier %q does not exist"
+	REG_ERR_NOT_EXIST_ID    = "entry with id %d does not exist"
+
+	REG_ERR_INVALID_NAME = "entry name %q contains invalid characters or has a length of 0"
+	REG_ERR_INVALID_MOD  = "mod name %q contains invalid characters or has a length of 0"
+
+	REG_ERR_DUPLICATE_MAPPING = "the identifier %q appears more than once in the mapping"
+)
+
 type Registry[T any, I constraints.Integer] struct {
 	mu sync.RWMutex
 
@@ -43,12 +102,13 @@ type Registry[T any, I constraints.Integer] struct {
 	is_frozen   bool
 	is_id_valid bool // when you leave a game, ids get invalidated, when you join a game, the ids get loaded
 
-	version uint32 // registry_version is incremented every time the the registry gets invalidated, and once when it is frozen
+	version uint32 // registry_version is incremented every time the the registry gets invalidated, when it is frozen and when a new id mapping is applied.
 
 	id2ident_arr []string
 	ident2id_map map[string]I
 }
 
+// Init doesnt lock the registry for reading or writing.
 func (r *Registry[T, I]) Init(name string) *Registry[T, I] {
 	r.name = name
 	r.resources = make(map[string]T)
@@ -59,7 +119,11 @@ func (r *Registry[T, I]) Init(name string) *Registry[T, I] {
 	r.ident2id_map = make(map[string]I)
 	return r
 }
+
+// Reset calls init, but also locks the registry for writing.
 func (r *Registry[T, I]) Reset() *Registry[T, I] {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	return r.Init(r.name)
 }
 
@@ -68,43 +132,22 @@ func (r *Registry[T, I]) GetVersion() uint32 {
 	defer r.mu.RUnlock()
 	return r.version
 }
-func (r *Registry[T, I]) errorf(format string, args ...any) error {
-	return fmt.Errorf("in registry (name:\"%s\",frozen:%v,valid:%v,version:%d): %w", r.name, r.is_frozen, r.is_id_valid, r.version, fmt.Errorf(format, args...))
-}
-func (r *Registry[T, I]) err_is_frozen() error {
-	if r.is_frozen {
-		return fmt.Errorf("registry is frozen: registration phase already ended")
-	}
-	return nil
-}
-func (r *Registry[T, I]) err_not_is_frozen() error {
-	if !r.is_frozen {
-		return fmt.Errorf("registry is not frozen: registration phase needs to end before registry can be queried")
-	}
-	return nil
-}
-func (r *Registry[T, I]) err_is_id_valid() error {
-	if r.is_frozen {
-		return fmt.Errorf("registry ids have not yet been invalidated: this means that the assigned numerical ids of resources still match their namespace identifiers, invalidate first")
-	}
-	return nil
-}
-func (r *Registry[T, I]) err_not_is_id_valid() error {
-	if !r.is_id_valid {
-		return fmt.Errorf("registry ids have been invalidated: this means that the assigned numerical ids of resources will no longer match their namespace identifiers, waiting for new id map")
-	}
-	return nil
-}
 
 func (r *Registry[T, I]) Register(mod string, name string, resource T) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if err := r.err_is_frozen(); err != nil {
-		return "", r.errorf("failed to register resource: %w", err)
+	if r.is_frozen {
+		return "", new_errorf(r, "register", REG_ERR_FROZEN)
+	}
+	if IsNameInvalid(mod) {
+		return "", new_errorf(r, "register", REG_ERR_INVALID_MOD, mod)
+	}
+	if IsNameInvalid(name) {
+		return "", new_errorf(r, "register", REG_ERR_INVALID_NAME, name)
 	}
 	ident := fmt.Sprintf("%s:%s", mod, name)
 	if _, exists := r.resources[ident]; exists {
-		return "", r.errorf("failed to register resource: resource identifier already used")
+		return "", new_errorf(r, "register", REG_ERR_EXIST_IDENT, ident)
 	}
 	r.resources[ident] = resource
 	return ident, nil
@@ -116,128 +159,172 @@ func (r *Registry[T, I]) RegisterPanic(mod string, name string, resource T) stri
 	}
 	return n
 }
-func (r *Registry[T, I]) Freeze() {
+
+func (r *Registry[T, I]) Freeze() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.is_frozen {
+		return new_errorf(r, "freeze", REG_ERR_FROZEN)
+	}
 	r.is_frozen = true
 	r.version++
+	return nil
 }
-
 func (r *Registry[T, I]) InvalidateIds() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if err := r.err_not_is_frozen(); err != nil {
-		return r.errorf("failed to invalidate id map: %w", err)
+	if !r.is_frozen {
+		return new_errorf(r, "invalidate_ids", REG_ERR_NOT_FROZEN)
+	}
+	if !r.is_id_valid {
+		return new_errorf(r, "invalidate_ids", REG_ERR_INVALIDATED)
 	}
 	r.is_id_valid = false
 	r.version++
 	return nil
 }
-func (r *Registry[T, I]) ApplyIdMap(m []string) (new_map []string, err error) {
+
+/*
+ApplyIdMap applies the given m id->identifier map, and sets the state to valid.
+
+Let R be the set of things that have been registered.
+
+Let M be the set of things in the mapping expects to have been registered.
+
+Then R*M' is the set of entries that were registered but have no mapping (new entries).
+
+Then R'*M is the set of entries that were not registered but have a mapping (missing entries).
+*/
+func (r *Registry[T, I]) ApplyIdMap(m []string) (new_map, new_entries, missing_entries []string, err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if err = r.err_not_is_frozen(); err != nil {
-		return nil, r.errorf("failed to handle id map: %w", err)
+	if !r.is_frozen {
+		return nil, nil, nil, new_errorf(r, "apply_id_map", REG_ERR_NOT_FROZEN)
 	}
-	m_len := len(m)
-	r.id2ident_arr = m
+	if r.is_id_valid {
+		return nil, nil, nil, new_errorf(r, "apply_id_map", REG_ERR_NOT_INVALIDATED)
+	}
+	r.id2ident_arr = make([]string, len(m))
+	copy(r.id2ident_arr, m)
 	r.ident2id_map = make(map[string]I)
 
-	missing := make([]string, 0)
-	loaded_len := 0
+	// CONJ -> AND -> INTERSECTION -> *
+	// DISJ -> OR -> UNION -> +
 
-	for id, ident := range m {
+	resources_size := len(r.resources)
+
+	registered_entries := make([]string, 0, resources_size)
+	for ident := range r.resources {
+		registered_entries = append(registered_entries, ident)
+	}
+	slices.Sort(registered_entries)
+
+	// have not been registered but have a mapping
+	missing_entries = make([]string, 0, resources_size)
+	for id, ident := range r.id2ident_arr {
+		if _, exists := r.ident2id_map[ident]; exists {
+			return nil, nil, nil, new_errorf(r, "apply_id_map", REG_ERR_DUPLICATE_MAPPING, ident)
+		}
+
 		r.ident2id_map[ident] = I(id)
 
-		_, exists := r.resources[ident]
-		if !exists {
-			missing = append(missing, ident)
-		} else {
-			loaded_len++
+		if _, exists := r.resources[ident]; !exists {
+			missing_entries = append(missing_entries, ident)
 		}
 	}
 
-	extra_len := len(r.resources) - loaded_len
+	// have been registered but have no mapping
+	new_entries = make([]string, 0, resources_size)
+	for _, ident := range registered_entries {
 
-	// log.Assert(extra_len >= 0, "registry: extra_len must always be >= 0")
-
-	if extra_len > 0 {
-		for ident := range r.resources {
-			_, exists := r.ident2id_map[ident]
-
-			if !exists {
-				r.ident2id_map[ident] = I(m_len)
-				r.id2ident_arr = append(r.id2ident_arr, ident)
-				m_len++
-			}
+		if _, exists := r.ident2id_map[ident]; !exists {
+			new_entries = append(new_entries, ident)
+			r.ident2id_map[ident] = I(len(r.id2ident_arr))
+			r.id2ident_arr = append(r.id2ident_arr, ident)
 		}
 	}
 
-	if len(missing) > 0 {
-		slog.Warn(fmt.Sprintf("missing registry entries when loading id map: %v", missing))
+	if len(missing_entries) > 0 {
+		slog.Warn(new_errorf(r, "apply_id_map", "missing registry entries when loading id map: %v", missing_entries).Error())
 	}
-
-	// log.Assert(m_len == len(r.id2ident_arr), "registry: m_len and id2ident_arr should be equal")
-	// log.Assert(len(r.id2ident_arr) == len(r.ident2id_map), "registry: id2ident_arr and ident2id_map should be equal")
+	if len(new_entries) > 0 {
+		slog.Info(new_errorf(r, "apply_id_map", "new registry entries when loading id map: %v", new_entries).Error())
+	}
 
 	r.is_id_valid = true
+	r.version++
+	new_map = make([]string, len(r.id2ident_arr))
+	copy(new_map, r.id2ident_arr)
+	return new_map, new_entries, missing_entries, nil
+}
 
-	return r.id2ident_arr, nil
+func (r *Registry[T, I]) impl_GetByIdent(ident string) (T, error) {
+	if !r.is_frozen {
+		var NA T
+		return NA, new_errorf(r, "get_by_ident", "identifier %q: %s", ident, REG_ERR_NOT_FROZEN)
+	}
+	res, exists := r.resources[ident]
+	if !exists {
+		return res, new_errorf(r, "get_by_ident", REG_ERR_NOT_EXIST_IDENT, ident)
+	}
+	return res, nil
+}
+func (r *Registry[T, I]) impl_GetId(ident string) (I, error) {
+	var NA I
+	if !r.is_frozen {
+		return NA, new_errorf(r, "get_id", "identifier %q: %s", ident, REG_ERR_NOT_FROZEN)
+	}
+	if !r.is_id_valid {
+		return NA, new_errorf(r, "get_id", "identifier %q: %s", ident, REG_ERR_INVALIDATED)
+	}
+	res, exists := r.ident2id_map[ident]
+	if !exists {
+		return res, new_errorf(r, "get_id", REG_ERR_NOT_EXIST_IDENT, ident)
+	}
+	return res, nil
+}
+func (r *Registry[T, I]) impl_GetIdent(id I) (string, error) {
+	var NA string
+	if !r.is_frozen {
+		return NA, new_errorf(r, "get_ident", "id %d: %s", id, REG_ERR_NOT_FROZEN)
+	}
+	if !r.is_id_valid {
+		return NA, new_errorf(r, "get_ident", "id %d: %s", id, REG_ERR_INVALIDATED)
+	}
+	if 0 > id || id >= I(len(r.id2ident_arr)) {
+		return NA, new_errorf(r, "get_ident", REG_ERR_NOT_EXIST_ID, id)
+	}
+	return r.id2ident_arr[id], nil
+}
+func (r *Registry[T, I]) impl_GetById(id I) (T, error) {
+	var NA T
+	ident, err := r.impl_GetIdent(id)
+	if err != nil {
+		return NA, err
+	}
+	return r.impl_GetByIdent(ident)
 }
 
 func (r *Registry[T, I]) GetByIdentifier(ident string) (T, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	if err := r.err_not_is_frozen(); err != nil {
-		var NA T
-		return NA, r.errorf("failed to get resource by identifier (%s): %w", ident, err)
-	}
-	res, exists := r.resources[ident]
-	if !exists {
-		return res, r.errorf("resource with identifier (%s) not registered", ident)
-	}
-	return res, nil
+	return r.impl_GetByIdent(ident)
 }
 func (r *Registry[T, I]) GetId(ident string) (I, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	var NA I
-	if err := r.err_not_is_frozen(); err != nil {
-		return NA, r.errorf("failed to get resource id (%s): %w", ident, err)
-	}
-	if err := r.err_not_is_id_valid(); err != nil {
-		return NA, r.errorf("failed to get resource by id (%s): %w", ident, err)
-	}
-	res, exists := r.ident2id_map[ident]
-	if !exists {
-		return res, r.errorf("resource with identifier (%s) not registered", ident)
-	}
-	return res, nil
+	return r.impl_GetId(ident)
 }
 func (r *Registry[T, I]) GetIdentifier(id I) (string, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	var NA string
-	if err := r.err_not_is_frozen(); err != nil {
-		return NA, r.errorf("failed to get resource identifier (%d): %w", id, err)
-	}
-	if err := r.err_not_is_id_valid(); err != nil {
-		return NA, r.errorf("failed to get resource by id (%d): %w", id, err)
-	}
-	if 0 > id || id >= I(len(r.id2ident_arr)) {
-		return NA, r.errorf("resource with id (%d) not registered", id)
-	}
-	return r.id2ident_arr[id], nil
+	return r.impl_GetIdent(id)
 }
 func (r *Registry[T, I]) GetById(id I) (T, error) {
-	var NA T
-	ident, err := r.GetIdentifier(id)
-	if err != nil {
-		return NA, err
-	}
-	return r.GetByIdentifier(ident)
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.impl_GetById(id)
 }
-
 func (r *Registry[T, I]) GetIdPanic(ident string) I {
 	res, err := r.GetId(ident)
 	if err != nil {
@@ -246,14 +333,47 @@ func (r *Registry[T, I]) GetIdPanic(ident string) I {
 	return res
 }
 
+// Creates a snapshot of the registry.
 func (r *Registry[T, I]) Iterate() iter.Seq2[string, T] {
+	r.mu.RLock()
+
+	snapshot := make([]struct {
+		key   string
+		value T
+	}, len(r.resources))
+	i := 0
+	for k, v := range r.resources {
+		snapshot[i].key = k
+		snapshot[i].value = v
+		i++
+	}
+
+	r.mu.RUnlock()
+
 	return func(yield func(string, T) bool) {
-		r.mu.RLock()
-		defer r.mu.RUnlock()
-		for k, v := range r.resources {
-			if !yield(k, v) {
+		for _, pair := range snapshot {
+			if !yield(pair.key, pair.value) {
 				return
 			}
 		}
 	}
 }
+
+//	func (r *Registry[T, I]) RegisterAlias(mod string, name string, alias string) (string, error) {
+//		r.mu.Lock()
+//		defer r.mu.Unlock()
+//		if r.is_frozen {
+//			return "", new_errorf(r, "registeralias", REG_ERR_FROZEN)
+//		}
+//		original_ident := fmt.Sprintf("%s:%s", mod, name)
+//		id, exists := r.ident2id_map[original_ident]
+//		if !exists {
+//			return "", new_errorf(r, "registeralias", REG_ERR_NOT_EXIST_IDENT, original_ident)
+//		}
+//		alias_ident := fmt.Sprintf("%s:%s", mod, alias)
+//		if _, exists := r.ident2id_map[alias_ident]; exists {
+//			return "", new_errorf(r, "registeralias", REG_ERR_EXIST_IDENT, alias_ident)
+//		}
+//		r.ident2id_map[alias_ident] = id
+//		return alias_ident, nil
+//	}
