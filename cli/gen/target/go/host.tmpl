@@ -4,22 +4,13 @@ func {{.Name}}({{template "emit_Params" .Input}})({{template "emit_ParamTypes" .
 {{- end}}
 
 {{block "main" . -}}
-// module {{.Name}}
-package generated
+// {{.Name}} was auto generated.
+package {{.Name}}
 
-import (
-	"github.com/tetratelabs/wazero/api"
-	"encoding/binary"
-	"context"
-	"unsafe"
-	"math"
-	"fmt"
-)
-
-type HostBinding struct {
+{{/* type HostBinding struct {
 	Name string
 	Method any
-}
+} */}}
 
 {{range .Types}}{{template "emit_TypeDeclaration" .}}{{end}}
 {{range .Host}}{{template "emit_FuncDecl" .}}

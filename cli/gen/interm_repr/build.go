@@ -257,7 +257,13 @@ func decl_func_host(c *TColl, mod *Module, name string, fn *TypeFunc) (*FuncDecl
 		Input:  append([]TypeParam{NameToTypeParam(N_API_MODULE)}, fn.Input...),
 		Output: fn.Output,
 	})
-	N_HOST_BINDING := b.NextT(TypeAnonymous{Name: "HostBinding"})
+	// N_HOST_BINDING := b.NextT(TypeAnonymous{Name: "HostBinding"})
+	N_HOST_BINDING := b.NextT(TypeStruct{
+		Fields: []TypeField{
+			{Name: "Name", Type: b.Ref(TypeP_string)},
+			{Name: "Method", Type: b.Ref(TypeAnonymous{Name: "any"})},
+		},
+	})
 	N_BINDING_INPUT := []Name{
 		{Name: "ctx", Type: b.Ref(TypeAnonymous{Name: "context.Context"})},
 		N_API_MODULE,

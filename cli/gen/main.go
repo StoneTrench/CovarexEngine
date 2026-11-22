@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -14,6 +15,7 @@ import (
 	"github.com/StoneTrench/CovarexEngine/cli/gen/interm_repr"
 	"github.com/StoneTrench/CovarexEngine/cli/gen/parser"
 	"github.com/StoneTrench/CovarexEngine/cli/gen/types"
+	"golang.org/x/tools/imports"
 )
 
 //go:embed target/*/*
@@ -121,16 +123,16 @@ func emit_modules(modules []parser.Module, t_coll *types.TypeCollection, tmpl_gu
 		var dest string
 
 		if tmpl_guest != nil {
-			dest = path.Join(out, lang, "guest", m.Name+"."+lang)
-			err := emit_template(tmpl_guest, "main", mod, dest)
+			dest = path.Join(out, lang, "guest", m.Name, "main."+lang)
+			err := emit_template(tmpl_guest, lang, "main", mod, dest)
 			if err != nil {
 				return err
 			}
 		}
 
 		if tmpl_host != nil {
-			dest = path.Join(out, lang, "host", m.Name+"."+lang)
-			err := emit_template(tmpl_host, "main", mod, dest)
+			dest = path.Join(out, lang, "host", m.Name, "main."+lang)
+			err := emit_template(tmpl_host, lang, "main", mod, dest)
 			if err != nil {
 				return err
 			}
@@ -138,20 +140,28 @@ func emit_modules(modules []parser.Module, t_coll *types.TypeCollection, tmpl_gu
 	}
 	return nil
 }
-func emit_template(t *template.Template, name string, data *interm_repr.Module, out string) error {
+func emit_template(t *template.Template, lang string, name string, data *interm_repr.Module, out string) error {
 	if err := os.MkdirAll(path.Dir(out), 0o755); err != nil {
 		return err
 	}
-	f, err := os.Create(out)
-	if err != nil {
+
+	var buf bytes.Buffer
+
+	if err := t.ExecuteTemplate(&buf, name, data); err != nil {
 		return err
 	}
-	defer f.Close()
-	// fmt.Print(f, data.StringPadding(0, "  "))
-	if err := t.ExecuteTemplate(f, name, data); err != nil {
-		return err
+
+	src := buf.Bytes()
+
+	if lang == "go" {
+		var err error
+		src, err = imports.Process(out, src, nil)
+		if err != nil {
+			return fmt.Errorf("processing Go imports: %w", err)
+		}
 	}
-	return nil
+
+	return os.WriteFile(out, src, 0o644)
 }
 
 func discover_tmpl(templates, lang string) (path_tmpl_common, path_tmpl_guest, path_tmpl_host string, err error) {

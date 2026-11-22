@@ -374,7 +374,7 @@ func convert_fields(c *TypeCollection, LUF fnLookup, t []*t_Field) ([]TypeField,
 var LEXER = lexer.MustSimple([]lexer.SimpleRule{
 	{Name: "Comment", Pattern: `//[^\n]*`},
 	{Name: "Ident", Pattern: `[a-zA-Z_][a-zA-Z0-9_\-]*`},
-	{Name: "Punct", Pattern: `[{}()\[\],*<>]`}, // added '<' '>'
+	{Name: "Punct", Pattern: `[{}()\[\],*<>]`},
 	{Name: "Whitespace", Pattern: `[ \t\r\n;]+`},
 	{Name: "Int", Pattern: `[0-9][0-9]*`},
 })

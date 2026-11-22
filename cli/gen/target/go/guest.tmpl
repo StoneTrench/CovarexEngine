@@ -7,15 +7,8 @@ func {{.Name}}({{template "emit_Params" .Input}})({{template "emit_ParamTypes" .
 
 {{block "main" . -}}
 //go:build wasip1
-// module {{.Name}}
-package generated
-
-import (
-	"encoding/binary"
-	"unsafe"
-	"math"
-	"sync"
-)
+// {{.Name}} was auto generated.
+package {{.Name}}
 
 var (
 	allocMu sync.Mutex
