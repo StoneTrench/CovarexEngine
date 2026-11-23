@@ -10,7 +10,7 @@ import (
 
 var (
 	ErrNilJob     = errors.New("a nil job was received")
-	ErrPoolClosed = errors.New("the pool is closed due to aids")
+	ErrPoolClosed = errors.New("the pool is closed")
 )
 
 type JobError struct {
