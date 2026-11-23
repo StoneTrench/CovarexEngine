@@ -46,6 +46,18 @@ func NewPayloadOriginal(small_data []byte) (payload []byte) {
 	return payload
 }
 
+// NewPayloadReliable attaches a reliable header to the payload, this commands the receiver to reply with an ACK payload.
+//
+// The seqnum parameter is used to maintain ordering of received packets.
+func NewPayloadReliable(small_data []byte, seqnum SeqNum) (payload []byte) {
+	payload = make([]byte, HEADER_SIZE_RELIABLE+len(small_data))
+	i := 0
+	i = PutUint(payload, i, PayloadType_RELIABLE)
+	i = PutUint(payload, i, seqnum)
+	copy(payload[i:], small_data)
+	return payload
+}
+
 type ChunkCount uint16
 type ChunkIndex uint16
 
@@ -88,16 +100,4 @@ func NewPayloadSplit(large_data []byte, seqnum SeqNum, data_size_limit int) (pay
 	}
 
 	return payloads
-}
-
-// NewPayloadReliable attaches a reliable header to the payload, this commands the receiver to reply with an ACK payload.
-//
-// The seqnum parameter is used to maintain ordering of received packets.
-func NewPayloadReliable(in_payload []byte, seqnum SeqNum) (payload []byte) {
-	payload = make([]byte, HEADER_SIZE_RELIABLE+len(in_payload))
-	i := 0
-	i = PutUint(payload, i, PayloadType_RELIABLE)
-	i = PutUint(payload, i, seqnum)
-	copy(payload[i:], in_payload)
-	return payload
 }

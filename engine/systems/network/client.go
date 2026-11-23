@@ -61,7 +61,7 @@ func StartClient(ctx context.Context, address string) (*Client, error) {
 
 	err = s.Transmitter.SendPayload(protocol.NewPayloadOriginal(nil), true)
 	if err != nil {
-		slog.Error(fmt.Errorf("Error occured in client: %w", err).Error())
+		slog.Error(fmt.Errorf("error occured in client: %w", err).Error())
 	}
 
 	return s, nil
@@ -91,7 +91,7 @@ func (s *Client) go_begin_listen() {
 				return
 			}
 			if err_fatal != nil {
-				slog.Error(fmt.Errorf("Fatal error occured in client while listening: %w", err_fatal).Error())
+				slog.Error(fmt.Errorf("fatal error occured in client while listening: %w", err_fatal).Error())
 				return
 			}
 
@@ -104,7 +104,7 @@ func (s *Client) go_begin_listen() {
 				s.mu.RUnlock()
 				err := trans.HandlePacket(payload, address, peer_id)
 				if err != nil {
-					slog.Error(fmt.Errorf("Error occured while client was handling packet: %w", err).Error())
+					slog.Error(fmt.Errorf("error occured while client was handling packet: %w", err).Error())
 				}
 
 				HandleIncomingData(trans, event_bus)

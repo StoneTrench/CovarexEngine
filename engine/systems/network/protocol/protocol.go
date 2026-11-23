@@ -17,8 +17,11 @@ A: It is the layer that exists between the Server/Client architecture and UDP. I
 // ParsePacket_WithHeader returns ok as true if it parsed the packet,
 // or false if it didn't parse any packet.
 func ParsePacket_WithHeader(buf []byte) (peer_id PeerId, payload []byte, ok bool) {
+	if len(buf) < HEADER_SIZE {
+		return 0, nil, false
+	}
 	prot_id, i := GetUint[uint32](buf, 0)
-	if len(buf) < HEADER_SIZE || prot_id != PROTOCOL_ID {
+	if prot_id != PROTOCOL_ID {
 		return 0, nil, false
 	}
 	peer_id, i = GetUint[PeerId](buf, i)
@@ -74,7 +77,7 @@ func PutUint[T ~uint8 | ~uint16 | ~uint32 | ~uint64](b []byte, offset int, value
 		b[offset+7] = byte(e)
 		return offset + 8
 	}
-	return 0
+	panic("invalid type in PutUint")
 }
 func GetUint[T ~uint8 | ~uint16 | ~uint32 | ~uint64](b []byte, offset int) (T, int) {
 	var value T

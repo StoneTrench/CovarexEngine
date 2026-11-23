@@ -7,7 +7,6 @@ The engine is made of multiple layers, like an onion. Each layer is only aware o
 + Core
 	+ Logging
 	+ Events
-	+ Async
 	+ Math
 + Resources
 	+ File formats
