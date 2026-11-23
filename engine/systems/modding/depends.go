@@ -40,22 +40,10 @@ func (e *DependencyIssue) Error() string {
 	return res
 }
 
-type HeaderCollection struct {
-	Headers []GuestModuleHeader
-	IdMap   map[string]uint
-}
-
-func (h *HeaderCollection) Init() *HeaderCollection {
-	h.Headers = make([]GuestModuleHeader, 0)
-	h.IdMap = make(map[string]uint)
-
-	return h
-}
-
 const (
-	// error if exists
+	// checkfor_NOT_EXISTS makes a DependencyIssue error if the module exists.
 	checkfor_NOT_EXISTS uint8 = iota
-	// error if not exists
+	// checkfor_EXISTS makes a DependencyIssue error if the module does not exist.
 	checkfor_EXISTS
 )
 
@@ -94,7 +82,6 @@ func validate_map(coll HeaderCollection, issues *[]DependencyIssue, cnst map[str
 		}
 	}
 }
-
 func single_mod_check_issues(coll HeaderCollection, issues *[]DependencyIssue, h *GuestModuleHeader) {
 	game_version := platform.GetVersion()
 
@@ -167,7 +154,7 @@ func CheckForHeaderIssues(coll HeaderCollection) []DependencyIssue {
 	issues := []DependencyIssue{}
 
 	for i := range coll.Headers {
-		h := &coll.Headers[i]
+		h := coll.Headers[i]
 		single_mod_check_issues(coll, &issues, h)
 	}
 

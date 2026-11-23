@@ -8,9 +8,23 @@ import (
 	"github.com/StoneTrench/CovarexEngine/engine/resources"
 )
 
-type json_SchemaVersion struct {
-	SchemaVersion *int `json:"schemaVersion"`
+type HeaderCollection struct {
+	Headers []*GuestModuleHeader
+	IdMap   map[string]int
 }
+
+func (h *HeaderCollection) Init() *HeaderCollection {
+	h.Headers = make([]*GuestModuleHeader, 0)
+	h.IdMap = make(map[string]int)
+
+	return h
+}
+func (h *HeaderCollection) Add(gst *GuestModuleHeader) {
+	id := len(h.Headers)
+	h.Headers = append(h.Headers, gst)
+	h.IdMap[gst.ModuleId] = id
+}
+
 type json_GMH_0 struct {
 	ModuleId   string `json:"moduleid"`
 	ModVersion string `json:"version"`
@@ -58,8 +72,6 @@ type GuestModuleHeader struct {
 	}
 }
 
-const LATEST_SCHEMA = 0
-
 func parse_deps(out *map[string]semver.Constraints, inp *map[string]string) error {
 	*out = make(map[string]semver.Constraints)
 
@@ -75,27 +87,22 @@ func parse_deps(out *map[string]semver.Constraints, inp *map[string]string) erro
 	}
 	return nil
 }
-func ParseJsonHeader(file_json []byte, out *GuestModuleHeader) error {
-	var schema json_SchemaVersion
-	err := json.Unmarshal(file_json, &schema)
-	if err != nil {
-		return fmt.Errorf("failed to get schema version from header: %w", err)
+func ParseJsonHeaderExtra[T any](file_json []byte, out *GuestModuleHeader, out_extra *T) error {
+	if out == nil {
+		return fmt.Errorf("argument out was nil")
 	}
 
-	if schema.SchemaVersion == nil {
-		i := LATEST_SCHEMA
-		schema.SchemaVersion = &i
+	if out_extra != nil {
+		err := json.Unmarshal(file_json, out_extra)
+		if err != nil {
+			return fmt.Errorf("failed to parse extra header: %w", err)
+		}
 	}
 
 	var head json_GMH_0
-	switch *schema.SchemaVersion {
-	case 0:
-		err := json.Unmarshal(file_json, &head)
-		if err != nil {
-			return fmt.Errorf("failed to parse header: %w", err)
-		}
-	default:
-		return fmt.Errorf("invalid schema version %d", schema.SchemaVersion)
+	err := json.Unmarshal(file_json, &head)
+	if err != nil {
+		return fmt.Errorf("failed to parse header: %w", err)
 	}
 
 	*out = GuestModuleHeader{}
@@ -135,4 +142,7 @@ func ParseJsonHeader(file_json []byte, out *GuestModuleHeader) error {
 	out.Compat.LoadBefore = head.Compat.LoadBefore
 
 	return nil
+}
+func ParseJsonHeader(file_json []byte, out *GuestModuleHeader) error {
+	return ParseJsonHeaderExtra[any](file_json, out, nil)
 }
