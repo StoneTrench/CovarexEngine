@@ -1,6 +1,8 @@
 # Bindings generator
 
-Pointers and function cannot be sent over the wire. Generics evaluate into their raw body, so its best to wrap them in a named type declaration.
+Reads the `.abi` abi declaration file, and uses the embedded templates to generate bindings for the target language.
+
+Function cannot be sent over the wire. Generics evaluate into their raw body, so its best to wrap them in a named type declaration.
 
 ## Usage
 
