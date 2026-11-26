@@ -25,7 +25,10 @@ func (h *HeaderCollection) Add(gst *GuestModuleHeader) {
 	h.IdMap[gst.ModuleId] = id
 }
 
-type json_GMH_0 struct {
+type json_schema struct {
+	SchemaVersion int `json:"schemaVersion"`
+}
+type json_v1 struct {
 	ModuleId   string `json:"moduleid"`
 	ModVersion string `json:"version"`
 
@@ -99,50 +102,69 @@ func ParseJsonHeaderExtra[T any](file_json []byte, out *GuestModuleHeader, out_e
 		}
 	}
 
-	var head json_GMH_0
+	var schema json_schema
+	err := json.Unmarshal(file_json, &schema)
+	if err != nil {
+		return fmt.Errorf("failed to parse schema header: %w", err)
+	}
+
+	switch schema.SchemaVersion {
+	case 1:
+		err := parse_json_v1(file_json, out)
+		if err != nil {
+			return fmt.Errorf("failed to parse: %w", err)
+		}
+	default:
+		return fmt.Errorf("invalid schema version %d", schema.SchemaVersion)
+	}
+
+	return nil
+}
+func ParseJsonHeader(file_json []byte, out *GuestModuleHeader) error {
+	return ParseJsonHeaderExtra[any](file_json, out, nil)
+}
+
+func parse_json_v1(file_json []byte, out *GuestModuleHeader) error {
+	var head json_v1
 	err := json.Unmarshal(file_json, &head)
 	if err != nil {
-		return fmt.Errorf("failed to parse header: %w", err)
+		return fmt.Errorf("header: %w", err)
 	}
 
 	*out = GuestModuleHeader{}
 	if err := resources.IsNameInvalidError(head.ModuleId); err != nil {
-		return fmt.Errorf("failed to parse modid: %w", err)
+		return fmt.Errorf("modid: %w", err)
 	}
 	out.ModuleId = head.ModuleId
 	out.Version, err = semver.NewVersion(head.ModVersion)
 	if err != nil {
-		return fmt.Errorf("failed to parse version: %w", err)
+		return fmt.Errorf("version: %w", err)
 	}
 
 	out.Links = head.Links
 
 	game_version, err := semver.NewConstraint(head.Compat.GameVersion)
 	if err != nil {
-		return fmt.Errorf("failed to parse game version: %w", err)
+		return fmt.Errorf("game version: %w", err)
 	}
 	out.Compat.GameVersion = *game_version
 	if err := parse_deps(&out.Compat.Depends, &head.Compat.Depends); err != nil {
-		return fmt.Errorf("failed to parse depends list: %w", err)
+		return fmt.Errorf("depends list: %w", err)
 	}
 	if err := parse_deps(&out.Compat.Recommends, &head.Compat.Recommends); err != nil {
-		return fmt.Errorf("failed to parse recommends list: %w", err)
+		return fmt.Errorf("recommends list: %w", err)
 	}
 	if err := parse_deps(&out.Compat.Suggests, &head.Compat.Suggests); err != nil {
-		return fmt.Errorf("failed to parse suggests list: %w", err)
+		return fmt.Errorf("suggests list: %w", err)
 	}
 	if err := parse_deps(&out.Compat.Conflicts, &head.Compat.Conflicts); err != nil {
-		return fmt.Errorf("failed to parse conflicts list: %w", err)
+		return fmt.Errorf("conflicts list: %w", err)
 	}
 	if err := parse_deps(&out.Compat.Breaks, &head.Compat.Breaks); err != nil {
-		return fmt.Errorf("failed to parse breaks list: %w", err)
+		return fmt.Errorf("breaks list: %w", err)
 	}
 
 	out.Compat.LoadAfter = head.Compat.LoadAfter
 	out.Compat.LoadBefore = head.Compat.LoadBefore
-
 	return nil
-}
-func ParseJsonHeader(file_json []byte, out *GuestModuleHeader) error {
-	return ParseJsonHeaderExtra[any](file_json, out, nil)
 }
