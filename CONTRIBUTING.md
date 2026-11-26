@@ -54,7 +54,7 @@ Use the imperative mood in commit descriptions (add, remove, implement).
 
 ## Versioning
 
-```r
+```bnf
 <MAJOR>.<MINOR>.<PATCH>[-rc.<RELEASE_CANDIDATE>]
 ```
 

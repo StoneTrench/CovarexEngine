@@ -1,6 +1,6 @@
 # Architecture
 
-The engine is made of multiple layers, like an onion. Each layer is only aware of the layer below itself. These layer are as follows:
+The engine is made of multiple layers, like an onion. Each layer is only aware of the layer below itself. These layers are as follows:
 + Platform
 	+ FileSystem
 	+ OS calls
