@@ -6,6 +6,16 @@ import (
 	"regexp"
 )
 
+type ResourceError struct {
+	Ident string
+	Op    string
+	Err   error
+}
+
+func (e *ResourceError) Error() string {
+	return fmt.Sprintf("resource %s: %s: %s", e.Ident, e.Op, e.Err.Error())
+}
+
 var regex_invalid = regexp.MustCompile("[^a-zA-Z0-9._]")
 
 // IsNameInvalid is used to check the incoming names for validity.
@@ -27,4 +37,17 @@ func IsNameInvalidError(name string) error {
 		errs = append(errs, fmt.Errorf("name %q has a length of zero", name))
 	}
 	return errors.Join(errs...)
+}
+
+// NameToIdentifier concatenates the two strings with a colon in between, returning a ResourceError if the names are not valid. See IsNameInvalidError.
+func NameToIdentifier(mod, name string) (string, error) {
+	ident := fmt.Sprintf("%s:%s", mod, name)
+	errlist := []error{}
+	if err := IsNameInvalidError(mod); err != nil {
+		errlist = append(errlist, &ResourceError{Ident: ident, Op: "name_to_identifier", Err: err})
+	}
+	if err := IsNameInvalidError(name); err != nil {
+		errlist = append(errlist, &ResourceError{Ident: ident, Op: "name_to_identifier", Err: err})
+	}
+	return ident, errors.Join(errlist...)
 }

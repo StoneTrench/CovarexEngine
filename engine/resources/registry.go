@@ -86,9 +86,6 @@ const (
 	REG_ERR_NOT_EXIST_IDENT = "entry with identifier %q does not exist"
 	REG_ERR_NOT_EXIST_ID    = "entry with id %d does not exist"
 
-	REG_ERR_INVALID_NAME = "entry name %q contains invalid characters or has a length of 0"
-	REG_ERR_INVALID_MOD  = "mod name %q contains invalid characters or has a length of 0"
-
 	REG_ERR_DUPLICATE_MAPPING = "the identifier %q appears more than once in the mapping"
 )
 
@@ -139,13 +136,10 @@ func (r *Registry[T, I]) Register(mod string, name string, resource T) (string, 
 	if r.is_frozen {
 		return "", new_errorf(r, "register", REG_ERR_FROZEN)
 	}
-	if IsNameInvalid(mod) {
-		return "", new_errorf(r, "register", REG_ERR_INVALID_MOD, mod)
+	ident, err := NameToIdentifier(mod, name)
+	if err != nil {
+		return "", new_error(r, "register", err)
 	}
-	if IsNameInvalid(name) {
-		return "", new_errorf(r, "register", REG_ERR_INVALID_NAME, name)
-	}
-	ident := fmt.Sprintf("%s:%s", mod, name)
 	if _, exists := r.resources[ident]; exists {
 		return "", new_errorf(r, "register", REG_ERR_EXIST_IDENT, ident)
 	}
