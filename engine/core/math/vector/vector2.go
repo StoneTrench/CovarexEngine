@@ -10,7 +10,7 @@ type Vec2[T math.Number] struct {
 	X, Y T
 }
 
-func InitVec2FromXY[T math.Number](x, y T) Vec2[T] {
+func InitVec2[T math.Number](x, y T) Vec2[T] {
 	return Vec2[T]{X: x, Y: y}
 }
 func InitVec2FromArray[T math.Number](slice [2]T) Vec2[T] {
@@ -26,7 +26,7 @@ func InitVec2FromSlice[T math.Number](slice []T) Vec2[T] {
 	}
 }
 func CastVec2[B, A math.Number](v Vec2[A]) Vec2[B] {
-	return InitVec2FromXY(B(v.X), B(v.Y))
+	return InitVec2(B(v.X), B(v.Y))
 }
 
 func (v Vec2[T]) SetX(x T) Vec2[T] {

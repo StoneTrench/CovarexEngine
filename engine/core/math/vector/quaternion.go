@@ -33,7 +33,7 @@ func InitQuatAngleAxis[T math.Number](angle, x, y, z T) Quat[T] {
 		W: cos,
 	}
 }
-func InitQuatWXYZ[T math.Number](x, y, z, w T) Quat[T] {
+func InitQuat[T math.Number](x, y, z, w T) Quat[T] {
 	return Quat[T]{X: x, Y: y, Z: z, W: w}
 }
 
