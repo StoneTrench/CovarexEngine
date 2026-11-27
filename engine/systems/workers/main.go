@@ -3,7 +3,6 @@ package workers
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 )
@@ -13,16 +12,8 @@ var (
 	ErrPoolClosed = errors.New("the pool is closed")
 )
 
-type JobError struct {
-	Value any
-}
-
-func (j *JobError) Error() string {
-	return fmt.Sprintf("worker recovered: %v", j.Value)
-}
-
 type Job interface {
-	Execute(ctx context.Context)
+	Work(ctx context.Context, worker uint) error
 }
 
 type Pool struct {
@@ -48,6 +39,8 @@ type Pool struct {
 // on_error - if it is not nil, then workers will recover job panics, and emit them as error in the callback.
 // This is not exactly thread safe, cause the goroutines call it directly. The callsite has a mutex lock, so that only one worker can call it at a time.
 // This callback must not panic.
+//
+// Workers exist until the pool is destroyed, and they are only created when the pool is created. Therefore their worker ids are stable.
 func NewPool(worker_count uint, job_queue_size uint, timeout time.Duration, on_error func(error)) *Pool {
 	p := new(Pool)
 
@@ -57,28 +50,31 @@ func NewPool(worker_count uint, job_queue_size uint, timeout time.Duration, on_e
 
 	p.on_error = on_error
 
-	for range worker_count {
-		go p.worker(timeout)
+	for i := range worker_count {
+		go p.worker(uint(i), timeout)
 	}
 
 	return p
 }
 
-func (p *Pool) execute_job(job Job, ctx context.Context) {
+func (p *Pool) execute_job(wrkr_id uint, job Job, ctx context.Context) {
 	defer func() {
 		if r := recover(); r != nil {
 			p.err_mu.Lock()
 			defer p.err_mu.Unlock()
 
 			if p.on_error != nil {
-				p.on_error(&JobError{Value: r})
+				p.on_error(&JobPanic{Value: r})
 			}
 		}
 	}()
 
-	job.Execute(ctx)
+	err := job.Work(ctx, wrkr_id)
+	if err != nil && p.on_error != nil {
+		p.on_error(&JobError{Value: err})
+	}
 }
-func (p *Pool) worker(timeout time.Duration) {
+func (p *Pool) worker(wrkr_id uint, timeout time.Duration) {
 	defer p.worker_wg.Done()
 
 	for {
@@ -92,12 +88,16 @@ func (p *Pool) worker(timeout time.Duration) {
 			if p.ctx.Err() != nil {
 				return
 			}
+			var ctx context.Context
+			var cancel func()
 			if timeout > 0 {
-				ctx, cancel := context.WithTimeout(p.ctx, timeout)
-				p.execute_job(job, ctx)
+				ctx, cancel = context.WithTimeout(p.ctx, timeout)
+			}
+
+			p.execute_job(wrkr_id, job, ctx)
+
+			if cancel != nil {
 				cancel()
-			} else {
-				p.execute_job(job, p.ctx)
 			}
 		}
 	}
