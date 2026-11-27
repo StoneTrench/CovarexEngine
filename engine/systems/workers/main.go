@@ -21,7 +21,9 @@ func (j *JobError) Error() string {
 	return fmt.Sprintf("worker recovered: %v", j.Value)
 }
 
-type Job func(ctc context.Context)
+type Job interface {
+	Execute(ctx context.Context)
+}
 
 type Pool struct {
 	ctx    context.Context
@@ -74,7 +76,7 @@ func (p *Pool) execute_job(job Job, ctx context.Context) {
 		}
 	}()
 
-	job(ctx)
+	job.Execute(ctx)
 }
 func (p *Pool) worker(timeout time.Duration) {
 	defer p.worker_wg.Done()
